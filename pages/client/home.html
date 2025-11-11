@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bank Dashboard</title>
+  <style>
+    /* === COLORS === */
+    :root {
+      --primary-color: #FF9800;
+      --accent-color: #FFB74D;
+      --sidebar-bg: #333;
+      --sidebar-text: #fff;
+      --content-bg: #f5f5f5;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: var(--content-bg);
+    }
+
+    /* === SIDEBAR === */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 220px;
+      background-color: var(--sidebar-bg);
+      color: var(--sidebar-text);
+      padding-top: 20px;
+      transition: width 0.3s;
+      overflow: hidden;
+    }
+
+    .sidebar.collapsed {
+      width: 60px;
+    }
+
+    .sidebar .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px 20px 10px;
+    }
+
+    .sidebar h2 {
+      font-size: 1.5rem;
+      color: var(--primary-color);
+      margin: 0;
+      white-space: nowrap;
+    }
+
+    .sidebar ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar ul li {
+      padding: 15px 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: background 0.2s;
+    }
+
+    .sidebar ul li:hover {
+      background-color: var(--accent-color);
+      color: #000;
+    }
+
+    .sidebar ul li i {
+      margin-right: 10px;
+    }
+
+    .sidebar.collapsed ul li span {
+      display: none;
+    }
+
+    .sidebar.collapsed h2 {
+      display: none;
+    }
+
+    /* Hamburger button inside sidebar */
+    .hamburger {
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--primary-color);
+      border-radius: 50%;
+      padding: 5px;
+    }
+
+    /* === MAIN CONTENT === */
+    .main-content {
+      margin-left: 220px;
+      padding: 40px;
+      transition: margin-left 0.3s;
+    }
+
+    .sidebar.collapsed + .main-content {
+      margin-left: 60px;
+    }
+
+    .dashboard {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 50px;
+    }
+
+    .card {
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      width: 200px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
+    .card h3 {
+      color: var(--primary-color);
+      margin-bottom: 10px;
+    }
+
+    .card p {
+      font-size: 1rem;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="header">
+      <h2>BankSys</h2>
+      <i class="hamburger" id="hamburger">&#9776;</i>
+    </div>
+    <ul>
+      <li id="home"><i>🏠</i> <span>Dashboard</span></li>
+      <li id="history"><i>📜</i> <span>Transaction History</span></li>
+      <li id="profile"><i>⚙️</i> <span>Profile Settings</span></li>
+      <li id="logout"><i>🚪</i> <span>Logout</span></li>
+    </ul>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content" id="mainContent">
+    <h1>Welcome, <span id="userName">User</span>!</h1>
+    <p>Your default account is ready to use.</p>
+
+    <div class="dashboard">
+      <div class="card" id="deposit">
+        <h3>Deposit</h3>
+        <p>Add money to your account</p>
+      </div>
+      <div class="card" id="transfer">
+        <h3>Transfer</h3>
+        <p>Send money to another account</p>
+      </div>
+      <div class="card" id="loan">
+        <h3>Loan</h3>
+        <p>Request a loan</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT -->
+  <script>
+    const sidebar = document.getElementById('sidebar');
+    const sidebarItems = document.querySelectorAll('.sidebar ul li');       // Highlight active sidebar item
+    sidebarItems.forEach(item => {
+      const page = item.id + '.html';
+      if (window.location.pathname.endsWith(page)) {
+        item.style.backgroundColor = 'var(--accent-color)';
+        item.style.color = '#000';
+      }
+    });
+
+    const hamburger = document.getElementById('hamburger');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+    });
+
+    const userNameSpan = document.getElementById('userName');
+    const clientToken = localStorage.getItem('clientToken');
+
+    if (clientToken) {
+      fetch('http://localhost:3000/api/client/profile/me', {
+        headers: { 'Authorization': `Bearer ${clientToken}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.full_name) userNameSpan.textContent = data.full_name;
+
+        // Store client info locally so other pages can access it
+        localStorage.setItem('clientData', JSON.stringify(data));
+      })
+      .catch(err => console.error(err));
+    }
+
+    // Sidebar menu actions
+    document.getElementById('home').addEventListener('click', () => {
+      window.location.href = 'home.html';
+    });
+
+    document.getElementById('history').addEventListener('click', () => {
+      window.location.href = 'history.html';
+    });
+
+    document.getElementById('profile').addEventListener('click', () => {
+      window.location.href = 'profile.html';
+    });
+
+    document.getElementById('logout').addEventListener('click', () => {
+      localStorage.removeItem('clientToken');
+      window.location.href = '../index.html';
+    });
+
+    // Dashboard card actions
+    document.getElementById('deposit').addEventListener('click', () => {
+      window.location.href = 'transactions.html?type=deposit';
+    });
+    document.getElementById('transfer').addEventListener('click', () => {
+      window.location.href = 'transactions.html?type=transfer';
+    });
+    document.getElementById('loan').addEventListener('click', () => {
+      window.location.href = 'transactions.html?type=loan';
+    });
+  </script>
+</body>
+</html>

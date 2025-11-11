@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Transactions</title>
+  <style>
+    :root {
+      --primary-color: #FF9800;
+      --accent-color: #FFB74D;
+      --sidebar-bg: #333;
+      --sidebar-text: #fff;
+      --content-bg: #f5f5f5;
+      --card-bg: #fff;
+      --table-header-bg: #FFB74D;
+      --text-color: #333;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: var(--content-bg);
+    }
+
+    /* === SIDEBAR === */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 220px;
+      background-color: var(--sidebar-bg);
+      color: var(--sidebar-text);
+      padding-top: 20px;
+      transition: width 0.3s;
+      overflow: hidden;
+    }
+
+    .sidebar.collapsed {
+      width: 60px;
+    }
+
+    .sidebar .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px 20px 10px;
+    }
+
+    .sidebar h2 {
+      font-size: 1.5rem;
+      color: var(--primary-color);
+      margin: 0;
+      white-space: nowrap;
+    }
+
+    .sidebar ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar ul li {
+      padding: 15px 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: background 0.2s;
+    }
+
+    .sidebar ul li:hover {
+      background-color: var(--accent-color);
+      color: #000;
+    }
+
+    .sidebar ul li i {
+      margin-right: 10px;
+    }
+
+    .sidebar.collapsed ul li span {
+      display: none;
+    }
+
+    .sidebar.collapsed h2 {
+      display: none;
+    }
+
+    .hamburger {
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--primary-color);
+      border-radius: 50%;
+      padding: 5px;
+    }
+
+    /* === MAIN CONTENT === */
+    .main-content {
+      margin-left: 220px;
+      padding: 40px;
+      transition: margin-left 0.3s;
+    }
+
+    .sidebar.collapsed + .main-content {
+      margin-left: 60px;
+    }
+
+    .back-btn {
+      display: inline-block;
+      margin-bottom: 20px;
+      padding: 10px 25px;
+      background-color: var(--primary-color);
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+
+    h1 {
+      color: var(--primary-color);
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: var(--card-bg);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    th {
+      background-color: var(--table-header-bg);
+      color: #000;
+    }
+
+    tr:hover {
+      background-color: #f1f1f1;
+    }
+
+    .message {
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    .error { color: #e53935; }
+    .success { color: #43a047; }
+  </style>
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="header">
+      <h2>BankSys</h2>
+      <i class="hamburger" id="hamburger">&#9776;</i>
+    </div>
+    <ul>
+      <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
+      <li id="accounts"><i>👤</i> <span>Client Accounts</span></li>
+      <li id="transactions"><i>📜</i> <span>Transactions</span></li>
+      <li id="logout"><i>🚪</i> <span>Logout</span></li>
+    </ul>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    <button class="back-btn" id="goBack">← Back to Home</button>
+    <h1>All Transactions</h1>
+    <div id="message" class="message"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Client</th>
+          <th>Transaction Type</th>
+          <th>Amount</th>
+          <th>Reason</th>
+          <th>Reference #</th>
+        </tr>
+      </thead>
+      <tbody id="transactionTableBody">
+        <!-- Transactions will load here -->
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const sidebar = document.getElementById('sidebar');
+    const sidebarItems = document.querySelectorAll('.sidebar ul li');       // Highlight active sidebar item
+    sidebarItems.forEach(item => {
+      const page = item.id + '.html';
+      if (window.location.pathname.endsWith(page)) {
+        item.style.backgroundColor = 'var(--accent-color)';
+        item.style.color = '#000';
+      }
+    });
+
+    const hamburger = document.getElementById('hamburger');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+    });
+    
+    const adminToken = localStorage.getItem('adminToken');
+    const transactionTableBody = document.getElementById('transactionTableBody');
+    const messageDiv = document.getElementById('message');
+    const goBack = document.getElementById('goBack');
+
+    // Sidebar navigation
+    document.getElementById('dashboard').addEventListener('click', () => window.location.href = 'dashboard.html');
+    document.getElementById('transactions').addEventListener('click', () => window.location.href = 'transactions.html');
+    document.getElementById('accounts').addEventListener('click', () => window.location.href = 'accounts.html');
+    document.getElementById('logout').addEventListener('click', () => {
+      localStorage.removeItem('adminToken');
+      window.location.href = '../index.html';
+    });
+
+    goBack.addEventListener('click', () => window.location.href = 'dashboard.html');
+
+    async function loadTransactions() {
+      if (!adminToken) {
+        messageDiv.textContent = "No token found. Please login again.";
+        messageDiv.className = "message error";
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/transactions', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          transactionTableBody.innerHTML = '';
+          data.transactions.forEach(tx => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${new Date(tx.created_at).toLocaleString()}</td>
+              <td>${tx.from_client}</td>
+              <td>${tx.transaction_type}</td>
+              <td>${tx.amount}</td>
+              <td>${tx.reason}</td>
+              <td>${tx.reference_number}</td>
+            `;
+            transactionTableBody.appendChild(tr);
+          });
+        } else {
+          messageDiv.textContent = data.message || "Failed to load transactions.";
+          messageDiv.className = "message error";
+        }
+      } catch (err) {
+        console.error(err);
+        messageDiv.textContent = "Server error while fetching transactions.";
+        messageDiv.className = "message error";
+      }
+    }
+
+    loadTransactions();
+  </script>
+</body>
+</html>
