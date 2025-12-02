@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deposit Account</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="header">
+      <h2>BankSys</h2>
+      <i class="hamburger" id="hamburger">&#9776;</i>
+    </div>
+    <ul>
+      <li id="home"><i>🏠</i> <span>Dashboard</span></li>
+      <li id="historyNav"><i>📜</i> <span>Transaction History</span></li>
+      <li id="profile"><i>⚙️</i> <span>Profile Settings</span></li>
+      <li id="notifications"><i>🔔</i> <span>Notifications</span></li>
+      <li id="logout"><i>🚪</i> <span>Logout</span></li>
+    </ul>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content" id="mainContent">
+    <h1>Deposit Account</h1>
+
+    <!-- Balance -->
+    <div class="balance-container">
+      <p>Balance: ₱<span id="depositBalance">0.00</span></p>
+      <p id="depositAccountId" class="subtext" style="font-weight: lighter; color: dimgray; font-size: 15px;"></p>
+    </div>
+
+    <!-- Go Back -->
+    <div style="display: flex; justify-content: right;">
+      <button class="button" id="goBackBtn" style="display:none;">Go Back</button>
+    </div>
+
+    <!-- Subtype tiles -->
+    <div class="dashboard subtype-dashboard" id="subtypeTiles">
+      <div class="card account-card account-open" id="depositTile">
+        <h3>Deposit</h3>
+        <p>Place funds into your account for safe keeping and future use.</p>
+      </div>
+      <div class="card account-card account-open" id="withdrawTile">
+        <h3>Withdraw</h3>
+        <p>Take funds out of your account for personal or business use.</p>
+      </div>
+      <div class="card account-card account-open" id="transferTile">
+        <h3>Transfer</h3>
+        <p>Move funds securely between your accounts or to another user.</p>
+      </div>
+      <div class="card account-card account-open" id="historyTile">
+        <h3>Transaction History</h3>
+        <p>View all your deposit transactions.</p>
+      </div>
+    </div>
+
+    <!-- Freeze button -->
+    <div style="display: flex; justify-content: right; margin-top:12px;">
+      <button class="button" id="freezeBtn" style="background-color: dodgerblue;">Freeze Account</button>
+    </div>
+
+    <!-- Form container -->
+    <div style="display: flex; justify-content: center; margin-top:18px;">
+      <div class="form" id="formContainer" style="display:none;"></div>
+    </div>
+
+    <!-- Transaction Table -->
+    <div id="transactionContainer" style="margin-top:20px; display:none;">
+      <div id="depositMessage" class="message"></div>
+      <table id="depositTransactionTable">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Recipient / Reason</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal" id="accountModal">
+      <div class="modal-content">
+        <span class="modal-close" id="modalClose">&times;</span>
+        <p id="accountMessage"></p>
+        <div id="modalActions" style="margin-top:20px; text-align:center;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+        // --- utilities: normalize client objects to snake_case ---
+        function normalizeClientObject(raw) {
+            if (!raw || typeof raw !== 'object') return {};
+            return {
+                user_id: raw.user_id || raw.id || null,
+                full_name: raw.full_name || raw.fullName || raw.name || null,
+                email: raw.email || raw.emailAddress || null,
+
+                deposit_type_id: raw.deposit_type_id || raw.depositTypeId || raw.depositType || null,
+                deposit_balance: raw.deposit_balance !== undefined ? raw.deposit_balance : (raw.depositBalance !== undefined ? raw.depositBalance : 0),
+
+                savings_type_id: raw.savings_type_id || raw.savingsTypeId || null,
+                savings_balance: raw.savings_balance !== undefined ? raw.savings_balance : (raw.savingsBalance !== undefined ? raw.savingsBalance : 0),
+
+                loan_type_id: raw.loan_type_id || raw.loanTypeId || null,
+                loan_balance: raw.loan_balance !== undefined ? raw.loan_balance : (raw.loanBalance !== undefined ? raw.loanBalance : 0),
+
+                ...raw
+            };
+        }
+
+        let _rawClient = JSON.parse(localStorage.getItem('clientData')) || {};
+        let clientData = normalizeClientObject(_rawClient);
+        const clientToken = localStorage.getItem('clientToken') || '';
+        const clientId = clientData?.user_id || null;
+
+        function saveClientData(updated) {
+            const normalized = normalizeClientObject(updated);
+            localStorage.setItem('clientData', JSON.stringify(normalized));
+            clientData = normalized;
+        }
+
+        const sidebar = document.getElementById('sidebar');
+        const hamburger = document.getElementById('hamburger');
+        const modal = document.getElementById('accountModal');
+        const modalClose = document.getElementById('modalClose');
+        const accountMessage = document.getElementById('accountMessage');
+        const modalActions = document.getElementById('modalActions');
+
+        const formContainer = document.getElementById('formContainer');
+        const subtypeTiles = document.getElementById('subtypeTiles');
+        const depositBalance = document.getElementById('depositBalance');
+        const goBackBtn = document.getElementById('goBackBtn');
+        const freezeBtn = document.getElementById('freezeBtn');
+        const transactionContainer = document.getElementById('transactionContainer');
+        const depositMessage = document.getElementById('depositMessage');
+
+        modalClose.addEventListener('click', () => modal.classList.remove('active'));
+        function showModal(message, actionsHTML = '') {
+            accountMessage.innerHTML = message;
+            modalActions.innerHTML = actionsHTML;
+            modal.classList.add('active');
+        }
+
+        async function fetchClientAccounts() {
+            try {
+                const res = await fetch('/api/client/accounts', {
+                    headers: { 'Authorization': `Bearer ${clientToken}` }
+                });
+                if (!res.ok) throw new Error('Failed to fetch accounts');
+                const accounts = await res.json();
+
+                accounts.forEach(acc => {
+                    if (acc.type_name === 'Deposit') {
+                        clientData.deposit_type_id = acc.type_id;
+                        clientData.deposit_balance = acc.balance;
+                    } else if (acc.type_name === 'Savings') {
+                        clientData.savings_type_id = acc.type_id;
+                        clientData.savings_balance = acc.balance;
+                    } else if (acc.type_name === 'Loan') {
+                        clientData.loan_type_id = acc.type_id;
+                        clientData.loan_balance = acc.balance;
+                    }
+                });
+
+                saveClientData(clientData);
+
+                if (clientData.deposit_balance !== undefined && clientData.deposit_balance !== null) {
+                    depositBalance.textContent = parseFloat(clientData.deposit_balance).toFixed(2);
+                }
+
+                const depositAccountId = document.getElementById("depositAccountId");
+                    if (depositAccountId) {
+                        depositAccountId.textContent = `Account ID: ${clientData.deposit_type_id}`;
+                }
+
+            } catch (err) {
+                console.error('Fetch accounts error:', err);
+                showModal('Could not fetch account info. Please log in again.');
+            }
+        }
+        fetchClientAccounts();
+
+        hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+        document.getElementById('home').onclick = () => location.href = 'home.html';
+        document.getElementById('historyNav').onclick = () => location.href = 'history.html';
+        document.getElementById('profile').onclick = () => location.href = 'profile.html';
+        document.getElementById('notifications').onclick = () => location.href = 'notifications.html';
+        document.getElementById('logout').onclick = () => {
+            localStorage.removeItem('clientToken');
+            localStorage.removeItem('clientData');
+            location.href = '../index.html';
+        };
+        document.getElementById('home').style.backgroundColor = 'var(--accent-color)';
+        document.getElementById('home').style.color = '#000';
+        
+        async function postTransaction(url, data) {
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${clientToken}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.message || 'Error');
+                return json;
+            } catch (err) {
+                showModal(`Transaction failed: ${err.message}`);
+                throw err;
+            }
+        }
+
+        async function applyFreezeStatus() {
+            const statusKey = `deposit_status_${clientId}`;
+            let status = localStorage.getItem(statusKey) || 'active';
+
+            function updateUI() {
+                document.querySelectorAll('.account-card').forEach(tile => {
+                    if (status !== 'active') {
+                        if (tile.id !== 'historyTile') tile.classList.add('account-closed');
+                    } else {
+                        tile.classList.remove('account-closed');
+                    }
+                });
+                if (status === 'active') freezeBtn.textContent = 'Freeze Account';
+                if (status === 'pending_freeze') freezeBtn.textContent = 'Freeze Pending...';
+                if (status === 'frozen') freezeBtn.textContent = 'Unfreeze Account';
+                if (status === 'pending_unfreeze') freezeBtn.textContent = 'Unfreeze Pending...';
+            }
+            updateUI();
+
+            freezeBtn.onclick = async () => {
+                if (!clientData.deposit_type_id) return showModal('Account type not found.');
+
+                if (status === 'active' || status === 'frozen') {
+                    const action = status === 'active' ? 'freeze' : 'unfreeze';
+                    showModal(
+                        `Are you sure you want to ${action} this account?`,
+                        `<div style="display:flex; gap:10px; justify-content:center;">
+                            <button id='confirmFreezeUnfreeze'>Proceed</button>
+                            <button id='cancelFreezeUnfreeze'>Cancel</button>
+                        </div>`
+                    );
+                    document.getElementById('confirmFreezeUnfreeze').onclick = async () => {
+                        try {
+                            const res = await fetch(`/api/client/account/${clientData.deposit_type_id}/freeze`, {
+                                method: 'PUT',
+                                headers: { 'Authorization': `Bearer ${clientToken}` }
+                            });
+                            const json = await res.json();
+                            status = status === 'active' ? 'pending_freeze' : 'pending_unfreeze';
+                            localStorage.setItem(statusKey, status);
+                            updateUI();
+                            showModal(json.message);
+                        } catch (err) {
+                            showModal('Failed to update freeze status.');
+                        }
+                    };
+                    document.getElementById('cancelFreezeUnfreeze').onclick = () => modal.classList.remove('active');
+                } else {
+                    showModal("A request is already being processed.");
+                }
+            };
+        }
+        applyFreezeStatus();
+
+        const subtypes = [
+            { id: 'depositTile', type: 'deposit', route: '/api/transactions/deposit' },
+            { id: 'withdrawTile', type: 'withdraw', route: '/api/transactions/withdraw' },
+            { id: 'transferTile', type: 'transfer', route: '/api/transactions/transfer' },
+            { id: 'historyTile', type: 'history' }
+        ];
+
+        subtypes.forEach(sub => {
+            const element = document.getElementById(sub.id);
+            if (!element) return;
+
+            element.onclick = async () => {
+                if (!clientData.deposit_type_id) {
+                    await fetchClientAccounts();
+                    if (!clientData.deposit_type_id) return showModal('Account type not found.');
+                }
+
+                const typeId = clientData.deposit_type_id;
+
+                if (sub.type === 'history') {
+                    subtypeTiles.style.display = 'none';
+                    formContainer.style.display = 'none';
+                    transactionContainer.style.display = 'block';
+                    goBackBtn.style.display = 'inline-block';
+                    freezeBtn.style.display = 'none';
+                    depositMessage.textContent = 'Fetching transactions...';
+
+                    try {
+                        const res = await fetch(`/api/transactions/history/account/Deposit`, {
+                            headers: { 'Authorization': `Bearer ${clientToken}` }
+                        });
+                        const data = await res.json();
+                        depositMessage.textContent = `Fetched ${data.length} transactions.`;
+
+                        const tbody = document.querySelector("#depositTransactionTable tbody");
+                        tbody.innerHTML = "";
+                        data.forEach(tx => {
+                            const tr = document.createElement("tr");
+                            tr.innerHTML = `
+                                <td>${new Date(tx.transaction_date).toLocaleString()}</td>
+                                <td>${tx.transaction_type}</td>
+                                <td>₱${parseFloat(tx.amount).toFixed(2)}</td>
+                                <td>${tx.description || '-'}</td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    } catch (err) {
+                        depositMessage.textContent = 'Failed to fetch transactions';
+                        depositMessage.classList.add('error');
+                    }
+
+                } else {
+                    let formHtml = `<form id="${sub.type}Form"><h2>${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} Money</h2>`;
+                    if (sub.type === 'transfer') formHtml += `<input type="number" placeholder="Recipient Account ID" required>`;
+                    formHtml += `<input type="number" placeholder="Amount" required>`;
+                    formHtml += `<button type="submit">${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)}</button></form>`;
+
+                    formContainer.innerHTML = formHtml;
+                    formContainer.style.display = 'block';
+                    subtypeTiles.style.display = 'none';
+                    transactionContainer.style.display = 'none';
+                    freezeBtn.style.display = 'none';
+                    goBackBtn.style.display = 'inline-block';
+
+                    const formEl = document.getElementById(`${sub.type}Form`);
+                    formEl.onsubmit = async e => {
+                        e.preventDefault();
+
+                        let amount, toTypeId;
+                        if (sub.type === 'transfer') {
+                            toTypeId = parseInt(e.target[0].value);
+                            amount = parseFloat(e.target[1].value);
+                        } else {
+                            amount = parseFloat(e.target[0].value);
+                        }
+
+                        if (isNaN(amount) || amount <= 0) return showModal('Enter a valid amount.');
+
+                        const payload = sub.type === 'transfer'
+                            ? { fromTypeId: typeId, toTypeId, amount }
+                            : { typeId, amount };
+
+                        const result = await postTransaction(sub.route, payload);
+
+                        // --- Updated balance logic ---
+                        if (result.newBalance !== undefined && result.newBalance !== null) {
+                            clientData.deposit_balance = parseFloat(result.newBalance);
+                        } else {
+                            clientData.deposit_balance = sub.type === 'deposit'
+                                ? (clientData.deposit_balance || 0) + amount
+                                : (clientData.deposit_balance || 0) - amount;
+                        }
+
+                        depositBalance.textContent = parseFloat(clientData.deposit_balance).toFixed(2);
+                        saveClientData(clientData);
+                        await fetchClientAccounts();
+
+                        if (sub.type === 'transfer') {
+                            showModal(
+                            `Transfer of ₱${amount.toFixed(2)} successful.<br>Sent to Account ID: ${payload.toTypeId}.`
+                            );
+                        } else {
+                            showModal(
+                            `${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} of ₱${amount.toFixed(2)} successful.`
+                            );
+                        }
+                    };
+                }
+            };
+        });
+
+        goBackBtn.onclick = () => {
+            formContainer.innerHTML = '';
+            formContainer.style.display = 'none';
+            transactionContainer.style.display = 'none';
+            freezeBtn.style.display = 'inline-block';
+            subtypeTiles.style.display = 'flex';
+            goBackBtn.style.display = 'none';
+        };
+    </script>
+</body>
+</html>

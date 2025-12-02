@@ -1,4 +1,5 @@
 // routes/adminRoutes.js
+console.log("Admin route file loaded");
 
 import express from "express";
 const router = express.Router();

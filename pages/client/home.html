@@ -3,141 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bank Dashboard</title>
-  <style>
-    /* === COLORS === */
-    :root {
-      --primary-color: #FF9800;
-      --accent-color: #FFB74D;
-      --sidebar-bg: #333;
-      --sidebar-text: #fff;
-      --content-bg: #f5f5f5;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: var(--content-bg);
-    }
-
-    /* === SIDEBAR === */
-    .sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 220px;
-      background-color: var(--sidebar-bg);
-      color: var(--sidebar-text);
-      padding-top: 20px;
-      transition: width 0.3s;
-      overflow: hidden;
-    }
-
-    .sidebar.collapsed {
-      width: 60px;
-    }
-
-    .sidebar .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 10px 20px 10px;
-    }
-
-    .sidebar h2 {
-      font-size: 1.5rem;
-      color: var(--primary-color);
-      margin: 0;
-      white-space: nowrap;
-    }
-
-    .sidebar ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .sidebar ul li {
-      padding: 15px 20px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      transition: background 0.2s;
-    }
-
-    .sidebar ul li:hover {
-      background-color: var(--accent-color);
-      color: #000;
-    }
-
-    .sidebar ul li i {
-      margin-right: 10px;
-    }
-
-    .sidebar.collapsed ul li span {
-      display: none;
-    }
-
-    .sidebar.collapsed h2 {
-      display: none;
-    }
-
-    /* Hamburger button inside sidebar */
-    .hamburger {
-      font-size: 1.5rem;
-      cursor: pointer;
-      color: var(--primary-color);
-      border-radius: 50%;
-      padding: 5px;
-    }
-
-    /* === MAIN CONTENT === */
-    .main-content {
-      margin-left: 220px;
-      padding: 40px;
-      transition: margin-left 0.3s;
-    }
-
-    .sidebar.collapsed + .main-content {
-      margin-left: 60px;
-    }
-
-    .dashboard {
-      display: flex;
-      justify-content: space-around;
-      margin-top: 50px;
-    }
-
-    .card {
-      background-color: #fff;
-      padding: 30px;
-      border-radius: 10px;
-      text-align: center;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      width: 200px;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-
-    .card h3 {
-      color: var(--primary-color);
-      margin-bottom: 10px;
-    }
-
-    .card p {
-      font-size: 1rem;
-      color: #555;
-    }
-  </style>
+  <title>BankSys Dashboard</title>
+  <link rel="stylesheet" href="../style.css">
 </head>
 <body>
-
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
     <div class="header">
@@ -148,6 +17,15 @@
       <li id="home"><i>🏠</i> <span>Dashboard</span></li>
       <li id="history"><i>📜</i> <span>Transaction History</span></li>
       <li id="profile"><i>⚙️</i> <span>Profile Settings</span></li>
+      <li id="notifications">
+        <i>🔔</i>
+        <span style="display:flex; align-items:center; gap:8px;">
+          Notifications
+          <span id="notifDot" style="
+            width:10px; height:10px; background:red; border-radius:50%; display:none;">
+          </span>
+        </span>
+      </li>
       <li id="logout"><i>🚪</i> <span>Logout</span></li>
     </ul>
   </div>
@@ -155,28 +33,51 @@
   <!-- MAIN CONTENT -->
   <div class="main-content" id="mainContent">
     <h1>Welcome, <span id="userName">User</span>!</h1>
-    <p>Your default account is ready to use.</p>
-
+    <h2>Your Accounts</h2>
     <div class="dashboard">
-      <div class="card" id="deposit">
+      <div class="card account-card account-open" id="deposit">
         <h3>Deposit</h3>
-        <p>Add money to your account</p>
+        <p>Your deposit account</p>
       </div>
-      <div class="card" id="transfer">
-        <h3>Transfer</h3>
-        <p>Send money to another account</p>
+      <div class="card account-card account-open" id="savings">
+        <h3>Savings</h3>
+        <p>Your savings account</p>
       </div>
-      <div class="card" id="loan">
+      <div class="card account-card account-eligible" id="loan">
         <h3>Loan</h3>
-        <p>Request a loan</p>
+        <p id="loanStatusText">You're not yet eligible for this account.</p>
+      </div>
+      <div class="card account-card account-closed" id="investment">
+        <h3>Investment</h3>
+        <p>Temporarily closed</p>
+      </div>
+      <div class="card account-card account-closed" id="health">
+        <h3>Health Insurance</h3>
+        <p>Temporarily closed</p>
       </div>
     </div>
   </div>
 
-  <!-- SCRIPT -->
+  <!-- Modal -->
+  <div class="modal" id="accountModal">
+    <div class="modal-content">
+      <span class="modal-close" id="modalClose">&times;</span>
+      <p id="accountMessage"></p>
+    </div>
+  </div>
+
   <script>
     const sidebar = document.getElementById('sidebar');
-    const sidebarItems = document.querySelectorAll('.sidebar ul li');       // Highlight active sidebar item
+    const hamburger = document.getElementById('hamburger');
+    const sidebarItems = document.querySelectorAll('.sidebar ul li');
+    const modal = document.getElementById('accountModal');
+    const modalClose = document.getElementById('modalClose');
+    const accountMessage = document.getElementById('accountMessage');
+
+    // Sidebar toggle
+    hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+
+    // Highlight active
     sidebarItems.forEach(item => {
       const page = item.id + '.html';
       if (window.location.pathname.endsWith(page)) {
@@ -185,56 +86,114 @@
       }
     });
 
-    const hamburger = document.getElementById('hamburger');
-    hamburger.addEventListener('click', () => {
-      sidebar.classList.toggle('collapsed');
-    });
-
     const userNameSpan = document.getElementById('userName');
     const clientToken = localStorage.getItem('clientToken');
 
     if (clientToken) {
-      fetch('http://localhost:3000/api/client/profile/me', {
+      fetch('/api/client/profile/me', {
         headers: { 'Authorization': `Bearer ${clientToken}` }
       })
       .then(res => res.json())
       .then(data => {
         if (data.full_name) userNameSpan.textContent = data.full_name;
-
-        // Store client info locally so other pages can access it
         localStorage.setItem('clientData', JSON.stringify(data));
       })
       .catch(err => console.error(err));
     }
 
-    // Sidebar menu actions
-    document.getElementById('home').addEventListener('click', () => {
-      window.location.href = 'home.html';
+    // Sidebar navigation
+    ['home','history','profile','notifications','logout'].forEach(id => {
+      document.getElementById(id).addEventListener('click', () => {
+        if(id === 'logout'){
+          localStorage.removeItem('clientToken');
+          window.location.href='../index.html';
+        } else window.location.href=id+'.html';
+      });
     });
 
-    document.getElementById('history').addEventListener('click', () => {
-      window.location.href = 'history.html';
+    // Modal close
+    modalClose.addEventListener('click', () => modal.classList.remove('active'));
+
+    // Account click behavior
+    const accounts = document.querySelectorAll('.account-card');
+    accounts.forEach(card => {
+      card.addEventListener('click', () => {
+        const status = card.classList.contains('account-open') ? 'open' :
+                      card.classList.contains('account-eligible') ? 'eligible' :
+                      'closed';
+        const id = card.id; // deposit, savings, loan, etc.
+
+        // Fetch balances from localStorage
+        const clientData = JSON.parse(localStorage.getItem('clientData')) || {};
+        const depositBal = parseFloat(clientData.deposit_balance || 0);
+        const savingsBal = parseFloat(clientData.savings_balance || 0);
+        const totalBal = depositBal + savingsBal;
+
+        if (status === 'open') {
+          if (id === 'deposit') window.location.href = 'deposit.html';
+          else if (id === 'savings') window.location.href = 'savings.html';
+          else {
+            accountMessage.textContent = `The ${card.querySelector('h3').textContent} account is temporarily closed.`;
+            modal.classList.add('active');
+          }
+        } else if (status === 'eligible' && id === 'loan') {
+          if (totalBal >= 50000) {
+            // Eligible: open loan page
+            window.location.href = 'loan.html';
+          } else {
+            // Not yet eligible: show modal with requirement
+            accountMessage.innerHTML = `
+              The ${card.querySelector('h3').textContent} account is not available yet.<br><br>
+              Minimum total balance required (Deposit + Savings): ₱50,000
+              <br>
+              <br>
+              Your current total balance: ₱${totalBal.toFixed(2)}
+            `;
+            modal.classList.add('active');
+          }
+        } else {
+          accountMessage.textContent = `The ${card.querySelector('h3').textContent} account is temporarily closed.`;
+          modal.classList.add('active');
+        }
+      });
     });
 
-    document.getElementById('profile').addEventListener('click', () => {
-      window.location.href = 'profile.html';
-    });
+    // Optional: dynamic loan tile update (colors or red alert)
+    function updateLoanTile(){
+      const loanTile = document.getElementById('loan');
+      const clientData = JSON.parse(localStorage.getItem('clientData')) || {};
+      const totalBal = (parseFloat(clientData.deposit_balance || 0) + parseFloat(clientData.savings_balance || 0));
 
-    document.getElementById('logout').addEventListener('click', () => {
-      localStorage.removeItem('clientToken');
-      window.location.href = '../index.html';
-    });
+      if(totalBal >= 50000){
+        loanTile.classList.remove('account-eligible');
+        loanTile.classList.add('account-open');
+        loanTile.querySelector('p').textContent = 'Your loan account';
+      } else {
+        loanTile.classList.add('account-eligible');
+        loanTile.querySelector('p').textContent = 'You are not yet eligible for this account.';
+      }
+    }
 
-    // Dashboard card actions
-    document.getElementById('deposit').addEventListener('click', () => {
-      window.location.href = 'transactions.html?type=deposit';
-    });
-    document.getElementById('transfer').addEventListener('click', () => {
-      window.location.href = 'transactions.html?type=transfer';
-    });
-    document.getElementById('loan').addEventListener('click', () => {
-      window.location.href = 'transactions.html?type=loan';
-    });
+    updateLoanTile();
+
+    //check if the user have read the notififications
+    async function checkUnreadNotifications() {
+        try {
+          const res = await fetch("/api/client/notifications/unread", {
+            headers: { "Authorization": "Bearer " + localStorage.getItem("clientToken") }
+          });
+
+          const data = await res.json();
+
+          const notifDot = document.getElementById("notifDot");
+          notifDot.style.display = data.unread > 0 ? "inline-block" : "none";
+
+        } catch (err) {
+          console.error("Unread check failed:", err);
+        }
+      }
+
+    checkUnreadNotifications();
   </script>
 </body>
 </html>

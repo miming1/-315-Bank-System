@@ -251,7 +251,7 @@
         const res = await fetch(`${API_BASE}/client/signup`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fullName, email, password })
+          body: JSON.stringify({ full_name: fullName, email, password })
         });
 
         const data = await res.json();

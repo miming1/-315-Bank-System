@@ -1,0 +1,134 @@
+-- USE bank1 or bank2;
+
+--users
+CREATE TABLE users (
+    user_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    role ENUM('admin','client') DEFAULT 'client',
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    status ENUM('Active','Inactive','pending_deletion') DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_status ON users(status);
+
+
+--account_types
+CREATE TABLE account_type (
+    type_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    account_number VARCHAR(30) UNIQUE NOT NULL,
+    type_name VARCHAR(100) NOT NULL,  -- e.g., Savings, Deposit, Loan
+    description TEXT,
+    balance DECIMAL(12,2) DEFAULT 0.00,
+    interest_earned DECIMAL(13,2) NOT NULL DEFAULT 0,
+    account_status ENUM('Open','Frozen','Pending Freeze','Pending Unfreeze') DEFAULT 'Open',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN last_interest_date DATE NULL,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+CREATE INDEX idx_account_type_user_id ON account_type(user_id);
+CREATE INDEX idx_account_type_status ON account_type(account_status);
+CREATE INDEX idx_account_type_user_status ON account_type(user_id, account_status);
+
+
+--account_subtypes
+CREATE TABLE account_subtype (
+    subtype_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    type_id BIGINT NOT NULL,
+    subtype_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    FOREIGN KEY (type_id) REFERENCES account_type(type_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+CREATE INDEX idx_account_subtype_type_id ON account_subtype(type_id);
+
+
+--transactions
+CREATE TABLE transactions (
+    transaction_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    type_id BIGINT NOT NULL,
+    transaction_type ENUM('Deposit','Withdraw','Transfer','Loan Payment') NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('Pending','Completed','Failed') DEFAULT 'Completed',
+    description TEXT,
+    FOREIGN KEY (type_id) REFERENCES account_type(type_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+CREATE INDEX idx_transactions_type_id ON transactions(type_id);
+CREATE INDEX idx_transactions_date ON transactions(transaction_date);
+CREATE INDEX idx_transactions_type_date ON transactions(type_id, transaction_date);
+CREATE INDEX idx_transactions_type ON transactions(transaction_type);
+CREATE INDEX idx_transactions_type_typeid_date ON transactions(transaction_type, type_id, transaction_date);
+
+
+--loan_applications
+CREATE TABLE loan_applications (
+    application_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    type_id BIGINT NOT NULL,
+    loan_amount DECIMAL(12,2) NOT NULL,
+    interest_rate DECIMAL(5,2) NOT NULL,
+    repayment_schedule TEXT NOT NULL,
+    status ENUM('Pending','Approved','Rejected','Closed') DEFAULT 'Pending',
+    application_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    FOREIGN KEY (type_id) REFERENCES account_type(type_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+CREATE INDEX idx_loan_user ON loan_applications(user_id);
+CREATE INDEX idx_loan_status ON loan_applications(status);
+CREATE INDEX idx_loan_user_status ON loan_applications(user_id, status);
+
+
+--notifications
+CREATE TABLE notifications (
+    notification_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    type ENUM('ACCOUNT_FROZEN','ACCOUNT_UNFROZEN','SCHEDULED_FOR_DELETION','TRANSFER_OUTGOING','TRANSFER_INCOMING') NOT NULL AFTER notification_id;
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_read TINYINT(1) DEFAULT 0 AFTER created_at,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE
+);
+
+CREATE INDEX idx_notifications_user ON notifications(user_id);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at);
+
+
+--admin_actions
+CREATE TABLE admin_actions (
+    action_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,                -- Admin performing the action
+    target_id BIGINT NOT NULL,              -- The record affected (loan_id, type_id, etc.)
+    target_table VARCHAR(50) NOT NULL,      -- Name of the table modified
+    action_type ENUM('Create','Update','Delete','Approve','Reject') NOT NULL,
+    action_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    remarks TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+CREATE INDEX idx_admin_actions_user ON admin_actions(user_id);
+CREATE INDEX idx_admin_actions_target ON admin_actions(target_table, target_id);
+CREATE INDEX idx_admin_actions_date ON admin_actions(action_date);

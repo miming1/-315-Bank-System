@@ -4,141 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Profile Settings</title>
-  <style>
-    :root {
-      --primary-color: #FF9800;
-      --accent-color: #FFB74D;
-      --sidebar-bg: #333;
-      --sidebar-text: #fff;
-      --content-bg: #f5f5f5;
-      --card-bg: #fff;
-      --text-color: #333;
-      --error-color: #e53935;
-      --success-color: #43a047;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: var(--content-bg);
-    }
-
-    /* === SIDEBAR === */
-    .sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 220px;
-      background-color: var(--sidebar-bg);
-      color: var(--sidebar-text);
-      padding-top: 20px;
-      transition: width 0.3s;
-      overflow: hidden;
-    }
-
-    .sidebar.collapsed { width: 60px; }
-
-    .sidebar .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 10px 20px 10px;
-    }
-
-    .sidebar h2 { font-size: 1.5rem; color: var(--primary-color); margin: 0; white-space: nowrap; }
-
-    .sidebar ul { list-style: none; padding: 0; margin: 0; }
-    .sidebar ul li {
-      padding: 15px 20px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      transition: background 0.2s;
-    }
-    .sidebar ul li:hover { background-color: var(--accent-color); color: #000; }
-    .sidebar ul li i { margin-right: 10px; }
-    .sidebar.collapsed ul li span { display: none; }
-    .sidebar.collapsed h2 { display: none; }
-
-    .hamburger {
-      font-size: 1.5rem;
-      cursor: pointer;
-      color: var(--primary-color);
-      border-radius: 50%;
-      padding: 5px;
-    }
-
-    /* === MAIN CONTENT === */
-    .main-content {
-      margin-left: 220px;
-      padding: 40px;
-      transition: margin-left 0.3s;
-    }
-
-    .sidebar.collapsed + .main-content { 
-        margin-left: 60px; 
-    }
-
-    .back-btn {
-      display: inline-block;
-      margin-bottom: 20px;
-      padding: 10px 25px;
-      background-color: var(--primary-color);
-      color: #fff;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .profile-card {
-      background-color: var(--card-bg);
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      max-width: 500px;
-      margin: 0 auto;
-    }
-
-    .profile-card h2 {
-      color: var(--primary-color);
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    .profile-field { margin-bottom: 15px; }
-    .profile-field label { display: block; margin-bottom: 5px; font-weight: bold; }
-    .profile-field span { display: inline-block; min-height: 1.2rem; }
-    .profile-field input {
-      width: 100%;
-      padding: 0.5rem;
-      font-size: 1rem;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-      display: none;
-    }
-
-    .profile-card button {
-      padding: 10px 15px;
-      font-size: 1rem;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      background-color: var(--primary-color);
-      color: #fff;
-      margin-top: 10px;
-    }
-    .profile-card button:hover { background-color: var(--accent-color); }
-
-    .message {
-      margin-top: 10px;
-      text-align: center;
-      font-size: 0.9rem;
-    }
-    .error { color: var(--error-color); }
-    .success { color: var(--success-color); }
-  </style>
+  <link rel="stylesheet" href="../style.css">
 </head>
 <body>
   <!-- SIDEBAR -->
@@ -151,6 +17,15 @@
       <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
       <li id="history"><i>📜</i> <span>Transaction History</span></li>
       <li id="profile"><i>⚙️</i> <span>Profile Settings</span></li>
+      <li id="notifications">
+        <i>🔔</i>
+        <span style="display:flex; align-items:center; gap:8px;">
+          Notifications
+          <span id="notifDot" style="
+            width:10px; height:10px; background:red; border-radius:50%; display:none;">
+          </span>
+        </span>
+      </li>
       <li id="logout"><i>🚪</i> <span>Logout</span></li>
     </ul>
   </div>
@@ -161,29 +36,47 @@
 
     <div class="profile-card">
       <h2>Profile Settings</h2>
+
       <div class="profile-field">
         <label>Name:</label>
         <span id="viewName">Loading...</span>
-        <input type="text" id="editName">
+        <input type="text" id="editName" style="display:none;">
       </div>
+
       <div class="profile-field">
         <label>Username:</label>
         <span id="viewEmail">Loading...</span>
-        <input type="text" id="editEmail">
+        <input type="text" id="editEmail" style="display:none;">
       </div>
+
       <div class="profile-field">
         <label>Password:</label>
         <span id="viewPassword">********</span>
-        <input type="password" id="editPassword" placeholder="Enter new password">
+        <input type="password" id="editPassword" placeholder="Enter new password" style="display:none;">
       </div>
-      <button id="editBtn">Edit Profile</button>
+
+      <div style="display:flex; gap:10px; margin-top:15px;">
+        <button id="editBtn">Edit Profile</button>
+        <button id="deleteBtn" class="delete-button" style="background-color: darkred;">Delete Account</button>
+      </div>
+
+      <p id="deleteStatusLabel" style="margin-top:10px; font-size:0.9rem; color:var(--error-color);"></p>
       <div class="message" id="message"></div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal" id="accountModal">
+    <div class="modal-content">
+      <span class="modal-close" id="modalClose">&times;</span>
+      <p id="accountMessage"></p>
+      <div id="modalActions"></div>
     </div>
   </div>
 
   <script>
     const sidebar = document.getElementById('sidebar');
-    const sidebarItems = document.querySelectorAll('.sidebar ul li');       // Highlight active sidebar item
+    const sidebarItems = document.querySelectorAll('.sidebar ul li');
     sidebarItems.forEach(item => {
       const page = item.id + '.html';
       if (window.location.pathname.endsWith(page)) {
@@ -206,11 +99,14 @@
     const editPassword = document.getElementById('editPassword');
     const editBtn = document.getElementById('editBtn');
     const goBack = document.getElementById('goBack');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const deleteStatusLabel = document.getElementById('deleteStatusLabel');
 
     // Sidebar navigation
     document.getElementById('dashboard').addEventListener('click', () => window.location.href = 'home.html');
     document.getElementById('history').addEventListener('click', () => window.location.href = 'history.html');
     document.getElementById('profile').addEventListener('click', () => window.location.href = 'profile.html');
+    document.getElementById('notifications').addEventListener('click', () => window.location.href = 'notifications.html');
     document.getElementById('logout').addEventListener('click', () => {
       localStorage.removeItem('clientToken');
       window.location.href = '../index.html';
@@ -220,7 +116,6 @@
 
     let editMode = false;
 
-    // Load profile data
     async function loadProfile() {
       if (!clientToken) return showError("No token found. Please login again.");
 
@@ -229,20 +124,14 @@
           method: 'GET',
           headers: { 'Authorization': `Bearer ${clientToken}` }
         });
-
         const data = await res.json();
 
-        if (!res.ok) {
-          messageDiv.textContent = data.message || "Failed to load profile.";
-          messageDiv.className = "message error";
-          return;
-        }
+        if (!res.ok) return showError(data.message || "Failed to load profile.");
 
         viewName.textContent = data.full_name;
         viewEmail.textContent = data.email;
         editName.value = data.full_name;
         editEmail.value = data.email;
-
       } catch (err) {
         console.error(err);
         showError("Server error while fetching profile.");
@@ -256,10 +145,9 @@
 
     loadProfile();
 
-    // Edit / Save functionality
+    // Edit / Save Profile
     editBtn.addEventListener('click', async () => {
       if (!editMode) {
-        // Switch to edit mode
         editMode = true;
         viewName.style.display = 'none';
         viewEmail.style.display = 'none';
@@ -269,7 +157,6 @@
         editPassword.style.display = 'block';
         editBtn.textContent = "Save Changes";
       } else {
-        // Save changes
         const payload = {
           fullName: editName.value.trim(),
           email: editEmail.value.trim()
@@ -291,14 +178,11 @@
             viewName.textContent = payload.fullName;
             viewEmail.textContent = payload.email;
             editPassword.value = '';
-
-            // Update stored user info for other pages
             const clientData = JSON.parse(localStorage.getItem('clientData')) || {};
             clientData.full_name = payload.fullName;
             clientData.email = payload.email;
             localStorage.setItem('clientData', JSON.stringify(clientData));
 
-            // Switch back to view mode
             editMode = false;
             viewName.style.display = 'inline';
             viewEmail.style.display = 'inline';
@@ -321,6 +205,74 @@
         }
       }
     });
+
+    // DELETE ACCOUNT
+    const modal = document.getElementById('accountModal');
+    const modalClose = document.getElementById('modalClose');
+    const accountMessage = document.getElementById('accountMessage');
+    const modalActions = document.getElementById('modalActions');
+
+    let deleteStatus = localStorage.getItem('delete_status') || 'none';
+    updateDeleteLabel();
+
+    function updateDeleteLabel() {
+      if(deleteStatus === 'pending') deleteStatusLabel.textContent = "Deletion Request Pending Admin Approval";
+      else if(deleteStatus === 'approved') deleteStatusLabel.textContent = "Account Approved for Deletion (Please Withdraw Balances)";
+      else deleteStatusLabel.textContent = "";
+    }
+
+    modalClose.addEventListener('click', () => modal.classList.remove('active'));
+    function showModal(message, actionsHTML=''){
+      accountMessage.innerHTML = message;
+      modalActions.innerHTML = actionsHTML;
+      modal.classList.add('active');
+    }
+
+    function saveDeleteStatus(newStatus){
+      deleteStatus = newStatus;
+      localStorage.setItem('delete_status', newStatus);
+      updateDeleteLabel();
+    }
+
+    deleteBtn.addEventListener('click', () => {
+      if(deleteStatus === 'none'){
+        showModal(
+          "Are you sure you want to request account deletion?",
+          `<button id='confirmDelete'>Proceed</button>
+           <button id='cancelDelete'>Cancel</button>`
+        );
+
+        document.getElementById('confirmDelete').onclick = () => {
+          saveDeleteStatus('pending');
+          showModal("Your deletion request has been sent. Waiting for admin approval.");
+        };
+        document.getElementById('cancelDelete').onclick = () => modal.classList.remove('active');
+
+      } else if(deleteStatus === 'pending'){
+        showModal("Your deletion request is already pending admin approval.");
+      } else if(deleteStatus === 'approved'){
+        showModal("Your account is approved for deletion. Please withdraw remaining balances.");
+      }
+    });
+
+    //check if the user have read the notififications
+    async function checkUnreadNotifications() {
+        try {
+          const res = await fetch("/api/client/notifications/unread", {
+            headers: { "Authorization": "Bearer " + localStorage.getItem("clientToken") }
+          });
+
+          const data = await res.json();
+
+          const notifDot = document.getElementById("notifDot");
+          notifDot.style.display = data.unread > 0 ? "inline-block" : "none";
+
+        } catch (err) {
+          console.error("Unread check failed:", err);
+        }
+      }
+
+    checkUnreadNotifications();
   </script>
 </body>
 </html>

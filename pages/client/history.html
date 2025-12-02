@@ -4,160 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Transaction History</title>
-  <style>
-    :root {
-      --primary-color: #FF9800;
-      --accent-color: #FFB74D;
-      --sidebar-bg: #333;
-      --sidebar-text: #fff;
-      --content-bg: #f5f5f5;
-      --card-bg: #fff;
-      --table-header-bg: #FFB74D;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: var(--content-bg);
-      display: flex;
-    }
-
-    /* === SIDEBAR === */
-    .sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 220px;
-      background-color: var(--sidebar-bg);
-      color: var(--sidebar-text);
-      padding-top: 20px;
-      transition: width 0.3s;
-      overflow: hidden;
-    }
-
-    .sidebar.collapsed {
-      width: 60px;
-    }
-
-    .sidebar .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 10px 20px 10px;
-    }
-
-    .sidebar h2 {
-      font-size: 1.5rem;
-      color: var(--primary-color);
-      margin: 0;
-      white-space: nowrap;
-    }
-
-    .sidebar ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .sidebar ul li {
-      padding: 15px 20px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      transition: background 0.2s;
-    }
-
-    .sidebar ul li:hover {
-      background-color: var(--accent-color);
-      color: #000;
-    }
-
-    .sidebar ul li i {
-      margin-right: 10px;
-    }
-
-    .sidebar.collapsed ul li span {
-      display: none;
-    }
-
-    .sidebar.collapsed h2 {
-      display: none;
-    }
-
-    /* Hamburger button inside sidebar */
-    .hamburger {
-      font-size: 1.5rem;
-      cursor: pointer;
-      color: var(--primary-color);
-      border-radius: 50%;
-      padding: 5px;
-    }
-
-    /* === MAIN CONTENT === */
-    .main-content {
-      margin-left: 220px;
-      padding: 40px;
-      width: 100%;
-      transition: margin-left 0.3s;
-    }
-
-    .sidebar.collapsed + .main-content {
-      margin-left: 60px;
-    }
-
-    .back-btn {
-      display: inline-block;
-      margin-bottom: 20px;
-      padding: 10px 20px;
-      background-color: var(--primary-color);
-      color: #fff;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .back-btn:hover {
-      background-color: var(--accent-color);
-      color: #000;
-    }
-
-    /* Transaction table */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background-color: var(--card-bg);
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-
-    th, td {
-      padding: 12px 15px;
-      text-align: left;
-      border-bottom: 1px solid #ddd;
-    }
-
-    th {
-      background-color: var(--table-header-bg);
-      color: #000;
-    }
-
-    tr:hover {
-      background-color: #f1f1f1;
-    }
-
-    .message {
-      margin-bottom: 1rem;
-      font-size: 0.9rem;
-      text-align: center;
-    }
-
-    .error { color: #e53935; }
-    .success { color: #43a047; }
-
-  </style>
+  <link rel="stylesheet" href="../style.css">
 </head>
 <body>
   <!-- SIDEBAR -->
@@ -170,6 +17,15 @@
       <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
       <li id="history"><i>📜</i> <span>Transaction History</span></li>
       <li id="profile"><i>⚙️</i> <span>Profile Settings</span></li>
+      <li id="notifications">
+        <i>🔔</i>
+        <span style="display:flex; align-items:center; gap:8px;">
+          Notifications
+          <span id="notifDot" style="
+            width:10px; height:10px; background:red; border-radius:50%; display:none;">
+          </span>
+        </span>
+      </li>
       <li id="logout"><i>🚪</i> <span>Logout</span></li>
     </ul>
   </div>
@@ -177,27 +33,30 @@
   <!-- MAIN CONTENT -->
   <div class="main-content">
     <button class="back-btn" id="backHome">← Back to Home</button>
+    <br><br>
     <h2>Transaction History</h2>
     <div id="message" class="message"></div>
-    <table id="transactionTable">
-      <thead>
+    
+    <table id="transactionTable" style="width:100%; border-collapse: collapse; border-radius:12px; overflow:hidden; box-shadow:0 5px 15px rgba(0,0,0,0.1);">
+      <thead style="background-color: var(--accent-color); color:#000;">
         <tr>
-          <th>Date</th>
-          <th>Type</th>
-          <th>Amount</th>
-          <th>Recipient / Reason</th>
+          <th style="padding:12px 15px; text-align:left;">ID</th>
+          <th style="padding:12px 15px; text-align:left;">Type ID</th>
+          <th style="padding:12px 15px; text-align:left;">Transaction Type</th>
+          <th style="padding:12px 15px; text-align:left;">Amount</th>
+          <th style="padding:12px 15px; text-align:left;">Date</th>
+          <th style="padding:12px 15px; text-align:left;">Status</th>
+          <th style="padding:12px 15px; text-align:left;">Description</th>
         </tr>
       </thead>
-      <tbody>
-        <!-- Transactions will be dynamically loaded here -->
-      </tbody>
+      <tbody></tbody>
     </table>
   </div>
 
   <script>
-    // Sidebar toggle
+    // Sidebar highlight
     const sidebar = document.getElementById('sidebar');
-    const sidebarItems = document.querySelectorAll('.sidebar ul li');       // Highlight active sidebar item
+    const sidebarItems = document.querySelectorAll('.sidebar ul li');
     sidebarItems.forEach(item => {
       const page = item.id + '.html';
       if (window.location.pathname.endsWith(page)) {
@@ -209,53 +68,89 @@
     const hamburger = document.getElementById('hamburger');
     hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
 
-    // Sidebar actions
-    document.getElementById('dashboard').addEventListener('click', () => window.location.href = 'home.html');
-    document.getElementById('history').addEventListener('click', () => window.location.href = 'history.html');
-    document.getElementById('profile').addEventListener('click', () => window.location.href = 'profile.html');
-    document.getElementById('logout').addEventListener('click', () => {
+    // Navigation
+    document.getElementById('dashboard').onclick = () => location.href = 'home.html';
+    document.getElementById('history').onclick = () => location.href = 'history.html';
+    document.getElementById('profile').onclick = () => location.href = 'profile.html';
+    document.getElementById('notifications').onclick = () => location.href = 'notifications.html';
+    document.getElementById('logout').onclick = () => {
       localStorage.removeItem('clientToken');
-      window.location.href = '../index.html';
-    });
+      location.href = '../index.html';
+    };
 
-    // Back button
-    document.getElementById('backHome').addEventListener('click', () => window.location.href = 'home.html');
+    document.getElementById('backHome').onclick = () => location.href = 'home.html';
 
-    // Fetch and display transactions
+    // Fetch Transactions
     const clientToken = localStorage.getItem('clientToken');
-    const transactionTableBody = document.querySelector('#transactionTable tbody');
+    const tableBody = document.querySelector('#transactionTable tbody');
     const messageDiv = document.getElementById('message');
 
-    if (clientToken) {
-      fetch('http://localhost:3000/api/transaction/history', {
+    if (!clientToken) {
+      messageDiv.textContent = "No client token found. Please login again.";
+      messageDiv.classList.add('error');
+    } else {
+      fetch('/api/transactions/history', {
         headers: { 'Authorization': `Bearer ${clientToken}` }
       })
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          data.forEach(tx => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${new Date(tx.created_at).toLocaleString()}</td>
-                <td>${tx.transaction_type}</td>
-                <td>${tx.amount}</td>
-                <td>${tx.reason || tx.reference_number || '-'}</td>
-                `;
-            transactionTableBody.appendChild(tr);
-          });
-        } else {
-          messageDiv.textContent = 'No transactions found.';
+        if (!Array.isArray(data) || data.length === 0) {
+          messageDiv.textContent = "No transactions found.";
+          return;
         }
+
+        data.forEach(tx => {
+          const tr = document.createElement('tr');
+          tr.style.borderBottom = "1px solid #ddd";
+
+          tr.innerHTML = `
+            <td style="padding:12px 15px;">${tx.transaction_id}</td>
+            <td style="padding:12px 15px;">${tx.type_id}</td>
+            <td style="padding:12px 15px;">${tx.transaction_type}</td>
+            <td style="padding:12px 15px;">₱${parseFloat(tx.amount).toFixed(2)}</td>
+            <td style="padding:12px 15px;">${new Date(tx.transaction_date).toLocaleString()}</td>
+            <td style="padding:12px 15px;">${tx.status}</td>
+            <td style="padding:12px 15px;">${tx.description || "-"}</td>
+          `;
+
+          tr.addEventListener('mouseenter', () => {
+            tr.style.backgroundColor = 'var(--accent-color)';
+            tr.style.color = '#000';
+          });
+          tr.addEventListener('mouseleave', () => {
+            tr.style.backgroundColor = '';
+            tr.style.color = '';
+          });
+
+          tableBody.appendChild(tr);
+        });
       })
       .catch(err => {
         console.error(err);
-        messageDiv.textContent = 'Failed to fetch transactions.';
+        messageDiv.textContent = "Failed to fetch transactions.";
         messageDiv.classList.add('error');
       });
-    } else {
-      messageDiv.textContent = 'No client token found. Please login again.';
-      messageDiv.classList.add('error');
     }
+
+    //check if the user have read the notififications
+    async function checkUnreadNotifications() {
+        try {
+          const res = await fetch("/api/client/notifications/unread", {
+            headers: { "Authorization": "Bearer " + localStorage.getItem("clientToken") }
+          });
+
+          const data = await res.json();
+
+          const notifDot = document.getElementById("notifDot");
+          notifDot.style.display = data.unread > 0 ? "inline-block" : "none";
+
+        } catch (err) {
+          console.error("Unread check failed:", err);
+        }
+      }
+
+    checkUnreadNotifications();
   </script>
+
 </body>
 </html>
