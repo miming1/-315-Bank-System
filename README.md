@@ -1,1 +1,3 @@
 # -315-Bank-System
+
+guys wala nako gi apil og push ang .env file diri (file nga gi storan natog private credentials sa TiDB cluster) for security purposes kay dili daw dapat i-push og apil ang .env file sa github, naka connect naman hinuon ang cluster nga atong gamiton sa ani nga project pero since need man ninyo i-run ang system, need mo magbuhat og .env file ha sa inyong vs code tas paste lang dayon akong i-send(di pako sure where i-send sad)...
