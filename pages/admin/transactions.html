@@ -116,7 +116,6 @@
       transition: background 0.2s;
     }
 
-
     h1 {
       color: var(--primary-color);
       margin-bottom: 20px;
@@ -166,7 +165,7 @@
     </div>
     <ul>
       <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
-      <li id="accounts"><i>👤</i> <span>Client Accounts</span></li>
+      <li id="accounts"><i>👤</i>Client Accounts<span id="sidebarRedDot" style="width:10px; height:10px; background:red; border-radius:50%; display:none; margin-left:5px;"></span></li>
       <li id="transactions"><i>📜</i> <span>Transactions</span></li>
       <li id="logout"><i>🚪</i> <span>Logout</span></li>
     </ul>
@@ -174,7 +173,7 @@
 
   <!-- MAIN CONTENT -->
   <div class="main-content">
-    <button class="back-btn" id="goBack">← Back to Home</button>
+    <button class="back-btn" id="goBack">← Back to Dashboard</button>
     <h1>All Transactions</h1>
     <div id="message" class="message"></div>
     <table>
@@ -184,7 +183,7 @@
           <th>Client</th>
           <th>Transaction Type</th>
           <th>Amount</th>
-          <th>Reason</th>
+          <th>Description</th>
           <th>Reference #</th>
         </tr>
       </thead>
@@ -196,8 +195,14 @@
 
   <script>
     const sidebar = document.getElementById('sidebar');
-    const sidebarItems = document.querySelectorAll('.sidebar ul li');       // Highlight active sidebar item
-    sidebarItems.forEach(item => {
+    const hamburger = document.getElementById('hamburger');
+    const adminToken = localStorage.getItem('adminToken');
+    const transactionTableBody = document.getElementById('transactionTableBody');
+    const messageDiv = document.getElementById('message');
+    const goBack = document.getElementById('goBack');
+
+    // Highlight sidebar active item
+    document.querySelectorAll('.sidebar ul li').forEach(item => {
       const page = item.id + '.html';
       if (window.location.pathname.endsWith(page)) {
         item.style.backgroundColor = 'var(--accent-color)';
@@ -205,20 +210,14 @@
       }
     });
 
-    const hamburger = document.getElementById('hamburger');
     hamburger.addEventListener('click', () => {
       sidebar.classList.toggle('collapsed');
     });
-    
-    const adminToken = localStorage.getItem('adminToken');
-    const transactionTableBody = document.getElementById('transactionTableBody');
-    const messageDiv = document.getElementById('message');
-    const goBack = document.getElementById('goBack');
 
     // Sidebar navigation
     document.getElementById('dashboard').addEventListener('click', () => window.location.href = 'dashboard.html');
-    document.getElementById('transactions').addEventListener('click', () => window.location.href = 'transactions.html');
     document.getElementById('accounts').addEventListener('click', () => window.location.href = 'accounts.html');
+    document.getElementById('transactions').addEventListener('click', () => window.location.href = 'transactions.html');
     document.getElementById('logout').addEventListener('click', () => {
       localStorage.removeItem('adminToken');
       window.location.href = '../index.html';
@@ -226,6 +225,32 @@
 
     goBack.addEventListener('click', () => window.location.href = 'dashboard.html');
 
+    async function checkPendingClientRequests() {
+      try {
+        const res = await fetch('/api/admin/clients', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        const data = await res.json();
+        if (!res.ok) return;
+
+        let hasRequests = false;
+        for (const client of data.clients) {
+          const pendingAccount = client.accounts?.some(a =>
+            a.account_status === 'pending_freeze' || a.account_status === 'pending_unfreeze'
+          );
+          if (pendingAccount || client.status === 'pending_deletion') hasRequests = true;
+        }
+
+        const sidebarRedDot = document.getElementById('sidebarRedDot');
+        if (sidebarRedDot) sidebarRedDot.style.display = hasRequests ? 'inline-block' : 'none';
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Run it on page load
+    checkPendingClientRequests();
+
+
+    // Fetch transactions
     async function loadTransactions() {
       if (!adminToken) {
         messageDiv.textContent = "No token found. Please login again.";
@@ -244,12 +269,12 @@
           data.transactions.forEach(tx => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td>${new Date(tx.created_at).toLocaleString()}</td>
-              <td>${tx.from_client}</td>
+              <td>${new Date(tx.transaction_date).toLocaleString()}</td>
+              <td>${tx.client_name || tx.from_client}</td>
               <td>${tx.transaction_type}</td>
               <td>${tx.amount}</td>
-              <td>${tx.reason}</td>
-              <td>${tx.reference_number}</td>
+              <td>${tx.description || '-'}</td>
+              <td>${tx.transaction_id}</td>
             `;
             transactionTableBody.appendChild(tr);
           });

@@ -1,145 +1,232 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin - Client Accounts</title>
-  <style>
-    :root {
-      --primary-color: #FF9800;
-      --accent-color: #FFB74D;
-      --sidebar-bg: #333;
-      --sidebar-text: #fff;
-      --content-bg: #f5f5f5;
-      --card-bg: #fff;
-      --table-header-bg: #FFB74D;
-      --text-color: #333;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Client Accounts</title>
+<style>
+:root {
+  --primary-color: #FF9800;
+  --accent-color: #FFB74D;
+  --sidebar-bg: #333;
+  --sidebar-text: #fff;
+  --content-bg: #f5f5f5;
+  --card-bg: #fff;
+  --table-header-bg: #FFB74D;
+  --text-color: #333;
+  --danger-color: #e53935;
+}
 
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: var(--content-bg);
-    }
+/* Body */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background-color: var(--content-bg);
+}
 
-    /* === SIDEBAR === */
-    .sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 220px;
-      background-color: var(--sidebar-bg);
-      color: var(--sidebar-text);
-      padding-top: 20px;
-      transition: width 0.3s;
-      overflow: hidden;
-    }
+/* Sidebar */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 220px;
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  padding-top: 20px;
+  transition: width 0.3s;
+  overflow: hidden;
+}
+.sidebar.collapsed { width: 60px; }
+.sidebar .header { display: flex; align-items: center; justify-content: space-between; padding: 0 10px 20px 10px; }
+.sidebar h2 { font-size: 1.5rem; color: var(--primary-color); margin: 0; white-space: nowrap; }
+.sidebar ul { list-style: none; padding: 0; margin: 0; }
+.sidebar ul li { padding: 15px 20px; cursor: pointer; display: flex; align-items: center; transition: background 0.2s; position: relative; }
+.sidebar ul li:hover { background-color: var(--accent-color); color: #000; }
+.sidebar ul li i { margin-right: 10px; }
+.sidebar.collapsed ul li span { display: none; }
+.sidebar.collapsed h2 { display: none; }
 
-    .sidebar.collapsed { width: 60px; }
-    .sidebar .header { display: flex; align-items: center; justify-content: space-between; padding: 0 10px 20px 10px; }
-    .sidebar h2 { font-size: 1.5rem; color: var(--primary-color); margin: 0; white-space: nowrap; }
-    .sidebar ul { list-style: none; padding: 0; margin: 0; }
-    .sidebar ul li { padding: 15px 20px; cursor: pointer; display: flex; align-items: center; transition: background 0.2s; }
-    .sidebar ul li:hover { background-color: var(--accent-color); color: #000; }
-    .sidebar ul li i { margin-right: 10px; }
-    .sidebar.collapsed ul li span { display: none; }
-    .sidebar.collapsed h2 { display: none; }
+.red-dot {
+  width: 10px;
+  height: 10px;
+  background-color: var(--danger-color);
+  border-radius: 50%;
+  position: absolute;
+  right: 10px;
+  top: 18px;
+}
 
-    .hamburger { font-size: 1.5rem; cursor: pointer; color: var(--primary-color); border-radius: 50%; padding: 5px; }
+.hamburger { font-size: 1.5rem; cursor: pointer; color: var(--primary-color); border-radius: 50%; padding: 5px; }
 
-    /* === MAIN CONTENT === */
-    .main-content { margin-left: 220px; padding: 40px; transition: margin-left 0.3s; }
-    .sidebar.collapsed + .main-content { margin-left: 60px; }
+/* Main content */
+.main-content { margin-left: 220px; padding: 40px; transition: margin-left 0.3s; }
+.sidebar.collapsed + .main-content { margin-left: 60px; }
 
-    h1 { color: var(--primary-color); margin-bottom: 20px; }
+h1 { color: var(--primary-color); margin-bottom: 20px; }
 
-    .back-btn {
-      display: inline-block;
-      margin-bottom: 20px;
-      padding: 10px 25px;
-      background-color: var(--primary-color);
-      color: #fff;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
+.back-btn {
+  margin-bottom: 20px;
+  padding: 10px 25px;
+  background-color: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
 
+.delete-red {
+  background-color: #ff4d4d;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.delete-red:hover {
+  background-color: #ff1a1a;
+}
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background-color: var(--card-bg);
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
+.back-btn:hover { background-color: var(--accent-color); }
 
-    th, td {
-      padding: 12px 15px;
-      text-align: left;
-      border-bottom: 1px solid #ddd;
-    }
+/* Table */
+table { width: 100%; border-collapse: collapse; background-color: var(--card-bg); border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+th { background-color: var(--table-header-bg); color: #000; }
+tr:hover { background-color: #f1f1f1; cursor: pointer; }
 
-    th { background-color: var(--table-header-bg); color: #000; }
-    tr:hover { background-color: #f1f1f1; }
+/* Messages */
+.message { margin-bottom: 1rem; font-size: 0.9rem; text-align: center; }
+.error { color: var(--danger-color); }
+.success { color: #43a047; }
 
-    .delete-btn {
-      padding: 5px 10px;
-      background-color: #e53935;
-      color: #fff;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-
-    .delete-btn:hover { background-color: #c62828; }
-
-    .message { margin-bottom: 1rem; font-size: 0.9rem; text-align: center; }
-    .error { color: #e53935; }
-    .success { color: #43a047; }
-  </style>
+/* User details */
+#userDetails h2 {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+#userDetails .user-info {
+  font-size: 0.95rem;
+  font-weight: 300;
+  color: #555;
+  margin-bottom: 10px;
+}
+.cards { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+.card {
+  background-color: var(--card-bg);
+  padding: 15px;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  flex: 1 1 200px;
+  position: relative;
+}
+.card h3 { color: var(--primary-color); margin-bottom: 5px; }
+.card p { font-size: 1rem; color: var(--text-color); margin: 3px 0; }
+.card p.status { font-weight: bold; }
+.card button {
+  margin-top: 10px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+}
+.freeze-btn { background-color: #1976d2; }
+.freeze-btn:hover { background-color: #1565c0; }
+.unfreeze-btn { background-color: #43a047; }
+.unfreeze-btn:hover { background-color: #388e3c; }
+.delete-btn { background-color: var(--danger-color); }
+.delete-btn:hover { background-color: #c62828; }
+</style>
 </head>
 <body>
-  <!-- SIDEBAR -->
-  <div class="sidebar" id="sidebar">
-    <div class="header">
-      <h2>BankSys</h2>
-      <i class="hamburger" id="hamburger">&#9776;</i>
-    </div>
-    <ul>
-      <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
-      <li id="accounts"><i>👤</i> <span>Client Accounts</span></li>
-      <li id="transactions"><i>📜</i> <span>Transactions</span></li>
-      <li id="logout"><i>🚪</i> <span>Logout</span></li>
-    </ul>
+<div class="sidebar" id="sidebar">
+  <div class="header">
+    <h2>BankSys</h2>
+    <i class="hamburger" id="hamburger">&#9776;</i>
   </div>
+  <ul>
+    <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
+    <li id="accounts"><i>👤</i> <span>Client Accounts</span><span class="red-dot" id="sidebarRedDot" style="display:none;"></span></li>
+    <li id="transactions"><i>📜</i> <span>Transactions</span></li>
+    <li id="logout"><i>🚪</i> <span>Logout</span></li>
+  </ul>
+</div>
 
-  <!-- MAIN CONTENT -->
-  <div class="main-content">
-    <button class="back-btn" id="goBack">← Back to Home</button>
-    <h1>Client Accounts</h1>
-    <div id="message" class="message"></div>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Full Name</th>
-          <th>Email</th>
-          <th>Created At</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="clientsTableBody">
-        <!-- Client rows will load here -->
-      </tbody>
-    </table>
+<div class="main-content">
+  <button class="back-btn" id="backDashboard">← Back to Dashboard</button>
+  <h1 id="mainTitle">Client Accounts</h1>
+  <div id="message" class="message"></div>
+
+  <!-- Client table -->
+  <table id="clientsTable">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Full Name</th>
+        <th>Email</th>
+        <th>Created At</th>
+        <th>Requests</th>
+      </tr>
+    </thead>
+    <tbody id="clientsTableBody"></tbody>
+  </table>
+
+  <!-- User details -->
+  <div id="userDetails" style="display:none;">
+    <h2 id="userName"></h2>
+    <div class="user-info" id="userInfo"></div>
+    <div class="cards" id="accountCards"></div>
+    <div id="deleteSection" style="margin-top:20px;"></div>
   </div>
+</div>
 
   <script>
     const sidebar = document.getElementById('sidebar');
-    const sidebarItems = document.querySelectorAll('.sidebar ul li');       // Highlight active sidebar item
+    const hamburger = document.getElementById('hamburger');
+    const adminToken = localStorage.getItem('adminToken');
+    const clientsTableBody = document.getElementById('clientsTableBody');
+    const messageDiv = document.getElementById('message');
+    const goBack = document.createElement('button');
+    const backDashboard = document.getElementById('backDashboard');
+    const userDetails = document.getElementById('userDetails');
+    const userName = document.getElementById('userName');
+    const userInfo = document.getElementById('userInfo');
+    const accountCards = document.getElementById('accountCards');
+    const deleteSection = document.getElementById('deleteSection');
+    const sidebarRedDot = document.getElementById('sidebarRedDot');
+    const mainTitle = document.getElementById('mainTitle');
+    const sidebarItems = document.querySelectorAll('.sidebar ul li');
+
+    goBack.textContent = '← Back to All Clients';
+    goBack.className = 'back-btn';
+    goBack.style.display = 'none';
+    mainTitle.parentNode.insertBefore(goBack, mainTitle.nextSibling);
+
+    document.getElementById('dashboard').addEventListener('click', () => window.location.href = 'dashboard.html');
+    document.getElementById('accounts').addEventListener('click', () => window.location.href = 'accounts.html');
+    document.getElementById('transactions').addEventListener('click', () => window.location.href = 'transactions.html');
+    document.getElementById('logout').addEventListener('click', () => {
+      localStorage.removeItem('adminToken');
+      window.location.href = '../index.html';
+    });
+    hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+
+    backDashboard.addEventListener('click', () => window.location.href = 'dashboard.html');
+
+    goBack.addEventListener('click', () => {
+      userDetails.style.display = 'none';
+      document.getElementById('clientsTable').style.display = '';
+      goBack.style.display = 'none';
+      mainTitle.style.display = '';
+      backDashboard.style.display = 'inline-block';
+      messageDiv.textContent = '';
+    });
+
     sidebarItems.forEach(item => {
       const page = item.id + '.html';
       if (window.location.pathname.endsWith(page)) {
@@ -148,89 +235,151 @@
       }
     });
 
-    const hamburger = document.getElementById('hamburger');
-    hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
-
-    const adminToken = localStorage.getItem('adminToken');
-    const clientsTableBody = document.getElementById('clientsTableBody');
-    const messageDiv = document.getElementById('message');
-    const goBack = document.getElementById('goBack');
-
-    // Sidebar navigation
-    document.getElementById('dashboard').addEventListener('click', () => window.location.href = 'dashboard.html');
-    document.getElementById('accounts').addEventListener('click', () => window.location.href = 'accounts.html');
-    document.getElementById('transactions').addEventListener('click', () => window.location.href = 'transactions.html');
-    document.getElementById('logout').addEventListener('click', () => {
-      localStorage.removeItem('adminToken');
-      window.location.href = '../index.html';
-    });
-
-    goBack.addEventListener('click', () => window.location.href = 'dashboard.html');
-
-    // Load clients
     async function loadClients() {
       if (!adminToken) {
         messageDiv.textContent = "No token found. Please login again.";
         messageDiv.className = "message error";
         return;
       }
-
       try {
-        const res = await fetch('/api/admin/clients', {
-          headers: { 'Authorization': `Bearer ${adminToken}` }
-        });
+        const res = await fetch('/api/admin/clients', { headers: { 'Authorization': `Bearer ${adminToken}` } });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Failed to load clients.");
 
-        if (res.ok) {
-          clientsTableBody.innerHTML = '';
-          data.clients.forEach(client => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-              <td>${client.id}</td>
-              <td>${client.full_name}</td>
-              <td>${client.email}</td>
-              <td>${new Date(client.created_at).toLocaleString()}</td>
-              <td><button class="delete-btn" data-id="${client.id}">Delete</button></td>
-            `;
-            clientsTableBody.appendChild(tr);
-          });
+        clientsTableBody.innerHTML = '';
+        let hasRequests = false;
 
-          // Add delete functionality
-          document.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-              const clientId = btn.getAttribute('data-id');
-              if (confirm("Are you sure you want to delete this client?")) {
-                try {
-                  const delRes = await fetch(`/api/admin/client/${clientId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${adminToken}` }
-                  });
-                  const delData = await delRes.json();
-                  if (delRes.ok) {
-                    messageDiv.textContent = delData.message;
-                    messageDiv.className = "message success";
-                    loadClients(); // refresh table
-                  } else {
-                    messageDiv.textContent = delData.message || "Failed to delete client.";
-                    messageDiv.className = "message error";
-                  }
-                } catch (err) {
-                  console.error(err);
-                  messageDiv.textContent = "Server error while deleting client.";
-                  messageDiv.className = "message error";
-                }
-              }
-            });
-          });
-        } else {
-          messageDiv.textContent = data.message || "Failed to load clients.";
-          messageDiv.className = "message error";
+        for (const client of data.clients) {
+          // Check if any account is pending freeze/unfreeze
+          const pendingAccount = client.accounts?.some(a =>
+            a.account_status === 'pending_freeze' || a.account_status === 'pending_unfreeze'
+          );
+
+          if (pendingAccount || client.status === 'pending_deletion') hasRequests = true;
+
+          const tr = document.createElement('tr');
+          const requestDot = pendingAccount || client.status === 'pending_deletion' ? '🔴' : '';
+
+          tr.innerHTML = `
+            <td>${client.user_id}</td>
+            <td>${client.full_name}</td>
+            <td>${client.email}</td>
+            <td>${new Date(client.created_at).toLocaleString()}</td>
+            <td style="text-align:center;">${requestDot}</td>
+          `;
+          tr.addEventListener('click', () => showUserDetails(client.user_id));
+          clientsTableBody.appendChild(tr);
         }
+
+        sidebarRedDot.style.display = hasRequests ? 'inline-block' : 'none';
+
       } catch (err) {
         console.error(err);
         messageDiv.textContent = "Server error while fetching clients.";
         messageDiv.className = "message error";
       }
+    }
+
+    async function showUserDetails(userId) {
+      document.getElementById('clientsTable').style.display = 'none';
+      mainTitle.style.display = 'none';
+      goBack.style.display = 'inline-block';
+      userDetails.style.display = 'block';
+      backDashboard.style.display = 'none';
+      accountCards.innerHTML = '';
+      deleteSection.innerHTML = '';
+      userInfo.innerHTML = '';
+
+      try {
+        const res = await fetch(`/api/admin/client/${userId}/accounts`, { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Failed to load user accounts.");
+
+        userName.textContent = data.user.full_name;
+        userInfo.innerHTML = `
+          <p>ID: ${data.user.user_id}</p>
+          <p>Email: ${data.user.email}</p>
+          <p>Status: ${data.user.status}</p>
+          <p>Created At: ${new Date(data.user.created_at).toLocaleString()}</p>
+        `;
+
+        data.accounts.filter(a => a.type_name !== 'Loan').forEach(account => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          let notice = '';
+          let buttonHTML = '';
+
+          if (account.account_status === 'pending_freeze') {
+            notice = 'User requested freeze';
+            buttonHTML = `<button class="freeze-btn" onclick="freezeAccount(${account.type_id}, this)">Freeze</button>`;
+          } else if (account.account_status === 'pending_unfreeze') {
+            notice = 'User requested unfreeze';
+            buttonHTML = `<button class="unfreeze-btn" onclick="unfreezeAccount(${account.type_id}, this)">Unfreeze</button>`;
+          }
+
+          card.innerHTML = `
+            <h3>${account.type_name}</h3>
+            <p>Account ID: ${account.type_id}</p>
+            <p>Account Number: ${account.account_number}</p>
+            <p>Balance: ${Number(account.balance).toFixed(2)}</p>
+            <p class="status">Status: ${account.account_status}</p>
+            ${notice ? `<p><strong>${notice}</strong></p>` : ''}
+            ${buttonHTML}
+          `;
+          accountCards.appendChild(card);
+        });
+
+        if (data.user.status === 'pending_deletion') {
+          deleteSection.innerHTML = `
+              <p style="font-weight: 300; margin-bottom: 15px;">
+                  User requested account deletion
+              </p>
+              <button class="back-btn delete-red" onclick="deleteUser(${userId})">Delete User</button>
+          `;
+        }
+
+      } catch (err) {
+        console.error(err);
+        messageDiv.textContent = "Server error while fetching user details.";
+        messageDiv.className = "message error";
+      }
+    }
+
+    async function freezeAccount(typeId, btn) {
+      try {
+        const res = await fetch(`/api/admin/freeze-account/${typeId}`, { method: 'POST', headers: { 'Authorization': `Bearer ${adminToken}` } });
+        const data = await res.json();
+        if (res.ok) {
+          btn.parentElement.querySelector('.status').textContent = "Status: Frozen";
+          btn.remove();
+          alert(data.message);
+        } else alert(data.message);
+      } catch (err) { console.error(err); alert("Error freezing account."); }
+    }
+
+    async function unfreezeAccount(typeId, btn) {
+      try {
+        const res = await fetch(`/api/admin/unfreeze-account/${typeId}`, { method: 'POST', headers: { 'Authorization': `Bearer ${adminToken}` } });
+        const data = await res.json();
+        if (res.ok) {
+          btn.parentElement.querySelector('.status').textContent = "Status: Open";
+          btn.remove();
+          alert(data.message);
+        } else alert(data.message);
+      } catch (err) { console.error(err); alert("Error unfreezing account."); }
+    }
+
+    async function deleteUser(userId) {
+      if (!confirm("Are you sure you want to delete this user?")) return;
+      try {
+        const res = await fetch(`/api/admin/delete-user/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${adminToken}` } });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message);
+          goBack.click();
+          loadClients();
+        } else alert(data.message);
+      } catch (err) { console.error(err); alert("Error deleting user."); }
     }
 
     loadClients();

@@ -122,6 +122,12 @@
       text-align: center;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
       flex: 1;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
     }
 
     .card h3 {
@@ -178,7 +184,7 @@
     </div>
     <ul>
       <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
-      <li id="accounts"><i>👤</i> <span>Client Accounts</span></li>
+      <li id="accounts"><i>👤</i>Client Accounts<span id="sidebarRedDot" style="width:10px; height:10px; background:red; border-radius:50%; display:none; margin-left:5px;"></span></li>
       <li id="transactions"><i>📜</i> <span>Transactions</span></li>
       <li id="logout"><i>🚪</i> <span>Logout</span></li>
     </ul>
@@ -206,8 +212,10 @@
         <tr>
           <th>Date</th>
           <th>Client</th>
-          <th>Transaction</th>
+          <th>Transaction Type</th>
           <th>Amount</th>
+          <th>Description</th>
+          <th>Reference #</th>
         </tr>
       </thead>
       <tbody id="transactionTableBody">
@@ -217,7 +225,9 @@
 
   <script>
     const sidebar = document.getElementById('sidebar');
-    const sidebarItems = document.querySelectorAll('.sidebar ul li');       // Highlight active sidebar item
+    const sidebarItems = document.querySelectorAll('.sidebar ul li');
+    const hamburger = document.getElementById('hamburger');
+
     sidebarItems.forEach(item => {
       const page = item.id + '.html';
       if (window.location.pathname.endsWith(page)) {
@@ -225,8 +235,7 @@
         item.style.color = '#000';
       }
     });
-    
-    const hamburger = document.getElementById('hamburger');
+
     hamburger.addEventListener('click', () => {
       sidebar.classList.toggle('collapsed');
     });
@@ -246,6 +255,31 @@
       window.location.href = '../index.html';
     });
 
+    async function checkPendingClientRequests() {
+      try {
+        const res = await fetch('/api/admin/clients', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        const data = await res.json();
+        if (!res.ok) return;
+
+        let hasRequests = false;
+        for (const client of data.clients) {
+          const pendingAccount = client.accounts?.some(a =>
+            a.account_status === 'pending_freeze' || a.account_status === 'pending_unfreeze'
+          );
+          if (pendingAccount || client.status === 'pending_deletion') hasRequests = true;
+        }
+
+        const sidebarRedDot = document.getElementById('sidebarRedDot');
+        if (sidebarRedDot) sidebarRedDot.style.display = hasRequests ? 'inline-block' : 'none';
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Run it on page load
+    checkPendingClientRequests();
+
+
     // Card navigation
     document.querySelector('.cards .card:nth-child(1)').addEventListener('click', () => {
       window.location.href = 'accounts.html';
@@ -255,7 +289,6 @@
       window.location.href = 'transactions.html';
     });
 
-    // Fetch totals and recent transactions
     async function loadDashboard() {
       if (!adminToken) {
         messageDiv.textContent = "No token found. Please login again.";
@@ -281,18 +314,23 @@
         if (transactionsRes.ok) {
           totalTransactionsEl.textContent = transactionsData.transactions.length;
 
-          // Populate table
+          // Populate table (match transactions.html)
           transactionTableBody.innerHTML = '';
           transactionsData.transactions.slice(0, 10).forEach(tx => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td>${new Date(tx.created_at).toLocaleString()}</td>
-              <td>${tx.from_client}</td>
+              <td>${new Date(tx.transaction_date).toLocaleString()}</td>
+              <td>${tx.client_name || tx.from_client}</td>
               <td>${tx.transaction_type}</td>
-              <td>${tx.amount}</td>
+              <td>${Number(tx.amount).toFixed(2)}</td>
+              <td>${tx.description || '-'}</td>
+              <td>${tx.transaction_id}</td>
             `;
             transactionTableBody.appendChild(tr);
           });
+        } else {
+          messageDiv.textContent = transactionsData.message || "Failed to load dashboard transactions.";
+          messageDiv.className = "message error";
         }
       } catch (err) {
         console.error(err);
@@ -303,6 +341,5 @@
 
     loadDashboard();
   </script>
-
 </body>
 </html>

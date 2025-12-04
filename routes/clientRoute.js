@@ -250,50 +250,41 @@ router.put("/profile/me", authenticateClient, async (req, res) => {
   }
 });
 
-// ========================
-// 5️⃣ FREEZE / UNFREEZE ACCOUNT
-// ========================
-router.put("/account/:accountId/freeze", authenticateClient, async (req, res) => {
-  try {
-    const clientId = req.clientId;
-    const accountId = req.params.accountId;
+// Request account freeze (client)
+router.put('/account/:accountId/freeze', async (req, res) => {
+    const { accountId } = req.params;
 
-    // Fetch current status
-    const [rows] = await db.query(
-      "SELECT account_status FROM account_type WHERE type_id = ? AND user_id = ?",
-      [accountId, clientId]
-    );
-    if (rows.length === 0) return res.status(404).json({ message: "Account not found" });
+    try {
+        const account = await prisma.user_account.update({
+            where: { account_id: Number(accountId) },
+            data: { account_status: 'pending_freeze' }
+        });
 
-    let newStatus;
-    switch (rows[0].account_status) {
-      case "Frozen":
-        newStatus = "Open";
-        break;
-      case "Open":
-      case "Closed":
-      default:
-        newStatus = "Frozen";
-        break;
+        return res.json({ success: true, account });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ success: false, message: 'Freeze request failed.' });
     }
-
-    await db.query("UPDATE account_type SET account_status = ? WHERE type_id = ?", [
-      newStatus,
-      accountId,
-    ]);
-
-    // Optional: create notification for this action
-    await db.query(
-      "INSERT INTO notifications (user_id, message) VALUES (?, ?)",
-      [clientId, `Your account #${accountId} has been ${newStatus.toLowerCase()}.`]
-    );
-
-    res.json({ message: `Account status updated to ${newStatus}.` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error." });
-  }
 });
+
+
+// Request account unfreeze (client)
+router.put('/account/:accountId/unfreeze', async (req, res) => {
+    const { accountId } = req.params;
+
+    try {
+        const account = await prisma.user_account.update({
+            where: { account_id: Number(accountId) },
+            data: { account_status: 'pending_unfreeze' }
+        });
+
+        return res.json({ success: true, account });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ success: false, message: 'Unfreeze request failed.' });
+    }
+});
+
 
 // ========================
 // 6️⃣ DELETE ACCOUNT REQUEST
@@ -311,7 +302,7 @@ router.post("/delete-request", authenticateClient, async (req, res) => {
     if (existing.length > 0) return res.status(400).json({ message: "Deletion already requested." });
 
     // Set account_status to PendingDeletion
-    await db.query("UPDATE users SET account_status = 'pending_deletion' WHERE user_id = ?", [
+    await db.query("UPDATE users SET status = 'pending_deletion' WHERE user_id = ?", [
       clientId,
     ]);
 

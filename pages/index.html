@@ -166,7 +166,7 @@
     <!-- ADMIN LOGIN -->
     <form id="adminLoginForm">
       <h2>Admin Login</h2>
-      <input type="text" id="adminUsername" placeholder="Username" required>
+      <input type="email" id="adminEmail" placeholder="Email" required>
       <input type="password" id="adminPassword" placeholder="Password" required>
       <button type="submit">Login as Admin</button>
       <div class="message" id="adminLoginMessage"></div>
@@ -284,7 +284,7 @@
     // ==== ADMIN LOGIN ====
     adminLoginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const username = document.getElementById("adminUsername").value;
+      const email = document.getElementById("adminEmail").value;
       const password = document.getElementById("adminPassword").value;
       const msg = document.getElementById("adminLoginMessage");
 
@@ -292,10 +292,10 @@
       msg.classList.remove("error");
 
       try {
-        const res = await fetch(`${API_BASE}/admin/login`, {
+        const res = await fetch(`api/admin/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ email, password })
         });
 
         const data = await res.json();

@@ -26,6 +26,23 @@ const verifyToken = (req, res, next) => {
 };
 
 // ========================
+// Helper: Check if account is frozen/pending
+// ========================
+const checkAccountStatus = async (typeId) => {
+  const [rows] = await db.query(
+    "SELECT account_status FROM account_type WHERE type_id = ?",
+    [typeId]
+  );
+  if (!rows.length) throw new Error("Account not found");
+
+  const status = rows[0].account_status;
+  if (['Frozen', 'Pending Freeze', 'Pending Unfreeze'].includes(status)) {
+    return { blocked: true, status };
+  }
+  return { blocked: false, status };
+};
+
+// ========================
 // Helper: Check if Loan Should Unlock
 // ========================
 const checkLoanEligibility = async (userId) => {
@@ -66,16 +83,31 @@ const checkLoanEligibility = async (userId) => {
           "Congratulations! Your loan account has been unlocked."
         );
 
-        return true; // loan just unlocked
+        return true;
       }
     }
 
-    return false; // no unlock
+    return false;
   } catch (err) {
     console.error("Loan eligibility check error:", err);
     return false;
   }
 };
+
+// ========================
+// Helper: Insert Notification
+// ========================
+async function insertNotification(userId, type, message) {
+  try {
+    await db.query(
+      `INSERT INTO notifications (user_id, type, message, is_read, created_at)
+       VALUES (?, ?, ?, 0, NOW())`,
+      [userId, type, message]
+    );
+  } catch (err) {
+    console.error("NOTIFICATION INSERT ERROR:", err);
+  }
+}
 
 // ========================
 // 1️⃣ DEPOSIT MONEY
@@ -87,13 +119,15 @@ router.post("/deposit", verifyToken, async (req, res) => {
     if (!typeId || !amount || amount <= 0)
       return res.status(400).json({ message: "Invalid deposit data." });
 
+    // Check freeze/unfreeze
+    const { blocked, status } = await checkAccountStatus(typeId);
+    if (blocked) return res.status(403).json({ message: `Cannot deposit: account is ${status}.` });
+
     const [accountRows] = await db.query(
       "SELECT * FROM account_type WHERE type_id = ? AND user_id = ?",
       [typeId, req.clientId]
     );
-
-    if (accountRows.length === 0)
-      return res.status(404).json({ message: "Account not found." });
+    if (!accountRows.length) return res.status(404).json({ message: "Account not found." });
 
     const referenceNumber = `DEP-${Date.now()}`;
 
@@ -107,10 +141,8 @@ router.post("/deposit", verifyToken, async (req, res) => {
       "UPDATE account_type SET balance = balance + ? WHERE type_id = ?",
       [amount, typeId]
     );
-    
-    //await insertNotification(req.clientId, result.insertId, `Deposit of ${amount} completed.`);
 
-    // 🔓 Auto-unlock loan if balance requirement met
+    // 🔓 Auto-unlock loan
     await checkLoanEligibility(req.clientId);
 
     res.json({ message: `Deposit of ${amount} successful.`, transactionId: result.insertId });
@@ -130,18 +162,18 @@ router.post("/withdraw", verifyToken, async (req, res) => {
     if (!typeId || !amount || amount <= 0)
       return res.status(400).json({ message: "Invalid withdrawal data." });
 
+    // Check freeze/unfreeze
+    const { blocked, status } = await checkAccountStatus(typeId);
+    if (blocked) return res.status(403).json({ message: `Cannot withdraw: account is ${status}.` });
+
     const [accountRows] = await db.query(
       "SELECT * FROM account_type WHERE type_id = ? AND user_id = ?",
       [typeId, req.clientId]
     );
-
-    if (accountRows.length === 0)
-      return res.status(404).json({ message: "Account not found." });
+    if (!accountRows.length) return res.status(404).json({ message: "Account not found." });
 
     const account = accountRows[0];
-
-    if (account.balance < amount)
-      return res.status(400).json({ message: "Insufficient balance." });
+    if (account.balance < amount) return res.status(400).json({ message: "Insufficient balance." });
 
     const referenceNumber = `WTH-${Date.now()}`;
 
@@ -155,10 +187,7 @@ router.post("/withdraw", verifyToken, async (req, res) => {
       "UPDATE account_type SET balance = balance - ? WHERE type_id = ?",
       [amount, typeId]
     );
-    
-    //await insertNotification(req.clientId, result.insertId, `Withdrawal of ${amount} completed.`);
 
-    // 🔓 Check if loan unlockable (rare but allowed)
     await checkLoanEligibility(req.clientId);
 
     res.json({ message: `Withdrawal of ${amount} successful.`, transactionId: result.insertId });
@@ -185,30 +214,25 @@ router.post("/transfer", verifyToken, async (req, res) => {
     if (fromId === toId)
       return res.status(400).json({ message: "Cannot transfer to the same account." });
 
-    // Validate sender (must be logged-in user)
+    // Check freeze/unfreeze for sender
+    const { blocked: senderBlocked, status: senderStatus } = await checkAccountStatus(fromId);
+    if (senderBlocked) return res.status(403).json({ message: `Cannot send: account is ${senderStatus}.` });
+
     const [fromRows] = await db.query(
       "SELECT * FROM account_type WHERE type_id = ? AND user_id = ?",
       [fromId, req.clientId]
     );
-
-    if (fromRows.length === 0)
-      return res.status(404).json({ message: "Sender account not found." });
-
+    if (!fromRows.length) return res.status(404).json({ message: "Sender account not found." });
     const sender = fromRows[0];
 
-    // Validate recipient
     const [toRows] = await db.query(
       "SELECT * FROM account_type WHERE type_id = ?",
       [toId]
     );
-
-    if (toRows.length === 0)
-      return res.status(404).json({ message: "Recipient account not found." });
-
+    if (!toRows.length) return res.status(404).json({ message: "Recipient account not found." });
     const recipient = toRows[0];
 
-    if (sender.balance < amt)
-      return res.status(400).json({ message: "Insufficient balance." });
+    if (sender.balance < amt) return res.status(400).json({ message: "Insufficient balance." });
 
     // Sender transaction
     await db.query(
@@ -227,34 +251,12 @@ router.post("/transfer", verifyToken, async (req, res) => {
     );
 
     // Balance updates
-    await db.query(
-      "UPDATE account_type SET balance = balance - ? WHERE type_id = ?",
-      [amt, fromId]
-    );
-    await db.query(
-      "UPDATE account_type SET balance = balance + ? WHERE type_id = ?",
-      [amt, toId]
-    );
+    await db.query("UPDATE account_type SET balance = balance - ? WHERE type_id = ?", [amt, fromId]);
+    await db.query("UPDATE account_type SET balance = balance + ? WHERE type_id = ?", [amt, toId]);
 
-    //await insertNotification(req.clientId, result.insertId, `Deposit of ${amount} completed.`);
-
-    // ----------------------------------
-    // 🔔 NOTIFICATIONS (NEW LOGIC)
-    // ----------------------------------
-
-    // Sender notification
-    await insertNotification(
-      req.clientId,
-      "TRANSFER_OUTGOING",
-      `You transferred ₱${amt.toFixed(2)} to account ${toId}.`
-    );
-
-    // Recipient notification
-    await insertNotification(
-      recipient.user_id,
-      "TRANSFER_INCOMING",
-      `You received ₱${amt.toFixed(2)} from account ${fromId}.`
-    );
+    // Notifications
+    await insertNotification(req.clientId, "TRANSFER_OUTGOING", `You transferred ₱${amt.toFixed(2)} to account ${toId}.`);
+    await insertNotification(recipient.user_id, "TRANSFER_INCOMING", `You received ₱${amt.toFixed(2)} from account ${fromId}.`);
 
     await checkLoanEligibility(req.clientId);
 
@@ -272,17 +274,18 @@ router.post("/transfer", verifyToken, async (req, res) => {
 router.post("/loan", verifyToken, async (req, res) => {
   try {
     const { typeId, amount, reason } = req.body;
-
     if (!typeId || !amount || amount <= 0 || !reason)
       return res.status(400).json({ message: "Invalid loan request." });
+
+    // Check freeze/unfreeze
+    const { blocked, status } = await checkAccountStatus(typeId);
+    if (blocked) return res.status(403).json({ message: `Cannot request loan: account is ${status}.` });
 
     const [accountRows] = await db.query(
       "SELECT * FROM account_type WHERE type_id = ? AND user_id = ?",
       [typeId, req.clientId]
     );
-
-    if (accountRows.length === 0)
-      return res.status(404).json({ message: "Account not found." });
+    if (!accountRows.length) return res.status(404).json({ message: "Account not found." });
 
     const referenceNumber = `LOAN-${Date.now()}`;
 
@@ -292,11 +295,7 @@ router.post("/loan", verifyToken, async (req, res) => {
       [typeId, amount, reason]
     );
 
-    await insertNotification(
-      req.clientId,
-      result.insertId,
-      `Loan request of ${amount} submitted.`
-    );
+    await insertNotification(req.clientId, result.insertId, `Loan request of ${amount} submitted.`);
 
     res.json({ message: `Loan request submitted.`, transactionId: result.insertId });
   } catch (err) {
@@ -353,29 +352,13 @@ router.get("/history/account/:accountType", verifyToken, async (req, res) => {
 });
 
 // ========================
-// 6️⃣ HELPER TO INSERT NOTIFICATION
-// ========================
-async function insertNotification(userId, type, message) {
-  try {
-    await db.query(
-      `INSERT INTO notifications (user_id, type, message, is_read, created_at)
-       VALUES (?, ?, ?, 0, NOW())`,
-      [userId, type, message]
-    );
-  } catch (err) {
-    console.error("NOTIFICATION INSERT ERROR:", err);
-  }
-}
-
-// ========================
-// 6️⃣ GET SAVINGS SUMMARY (applies interest up to today)
+// 7️⃣ GET SAVINGS SUMMARY
 // ========================
 router.get("/savings/summary", verifyToken, async (req, res) => {
   try {
     const userId = req.clientId;
     const DAILY_RATE = 0.0001; // Daily interest rate (~3.65% annually)
 
-    // 1) Get savings account
     const [accRows] = await db.query(
       `SELECT type_id, balance, interest_earned, last_interest_date
        FROM account_type
@@ -384,44 +367,36 @@ router.get("/savings/summary", verifyToken, async (req, res) => {
       [userId]
     );
 
-    if (accRows.length === 0) {
-      return res.status(404).json({ message: "Savings account not found." });
-    }
+    if (!accRows.length) return res.status(404).json({ message: "Savings account not found." });
 
     const acc = accRows[0];
     const typeId = acc.type_id;
 
+    // Check freeze/unfreeze
+    const { blocked, status } = await checkAccountStatus(typeId);
+    if (blocked) return res.status(403).json({ message: `Cannot calculate savings: account is ${status}.` });
+
     let balance = parseFloat(acc.balance || 0);
     let interestEarnedTotal = parseFloat(acc.interest_earned || 0);
 
-    // 2) Compute days difference using string comparison ONLY (no timezone)
     const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+    const todayStr = today.toISOString().slice(0, 10);
 
-    let lastStr = acc.last_interest_date; // <-- already YYYY-MM-DD
-
+    let lastStr = acc.last_interest_date;
     let days = 0;
 
     if (!lastStr) {
-      // First time: set date and skip interest
       await db.query(
         `UPDATE account_type SET last_interest_date = ? WHERE type_id = ?`,
         [todayStr, typeId]
       );
     } else {
-      // Simple date-only difference
       const t = new Date(todayStr);
       const l = new Date(lastStr);
-      const diff = Math.floor((t - l) / (1000 * 60 * 60 * 24));
-      days = diff > 0 ? diff : 0;
+      days = Math.floor((t - l) / (1000 * 60 * 60 * 24));
+      days = days > 0 ? days : 0;
     }
 
-    console.log("Interest Debug →", { todayStr, lastStr, days });
-
-
-    //console.log("Interest Debug →", { todayStr, last_interest_date: acc.last_interest_date, days });
-
-    // 3) Apply compound daily interest if at least 1 day passed
     if (days >= 1) {
       const growth = Math.pow(1 + DAILY_RATE, days);
       const newBalance = balance * growth;
@@ -430,7 +405,6 @@ router.get("/savings/summary", verifyToken, async (req, res) => {
       const interestRounded = Math.round(interest * 100) / 100;
       const updatedBalance = Math.round((balance + interestRounded) * 100) / 100;
 
-      // Update DB
       await db.query(
         `UPDATE account_type
          SET balance = ?, interest_earned = interest_earned + ?, last_interest_date = ?
@@ -438,7 +412,6 @@ router.get("/savings/summary", verifyToken, async (req, res) => {
         [updatedBalance, interestRounded, todayStr, typeId]
       );
 
-      // Insert transaction record
       if (interestRounded > 0) {
         await db.query(
           `INSERT INTO transactions
@@ -448,12 +421,10 @@ router.get("/savings/summary", verifyToken, async (req, res) => {
         );
       }
 
-      // Update local variables
       balance = updatedBalance;
       interestEarnedTotal += interestRounded;
     }
 
-    // 4) Compute total deposits & withdrawals
     const [sumRows] = await db.query(
       `SELECT
          COALESCE(SUM(CASE WHEN transaction_type = 'Deposit' THEN amount END), 0) AS totalDeposits,
@@ -466,7 +437,6 @@ router.get("/savings/summary", verifyToken, async (req, res) => {
     const totalDeposits = parseFloat(sumRows[0].totalDeposits || 0);
     const totalWithdrawals = parseFloat(sumRows[0].totalWithdrawals || 0);
 
-    // 5) Send to frontend
     res.json({
       totalDeposits: Number(totalDeposits.toFixed(2)),
       totalWithdrawals: Number(totalWithdrawals.toFixed(2)),

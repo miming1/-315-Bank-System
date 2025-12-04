@@ -30,6 +30,7 @@
     <div class="balance-container">
       <p>Balance: ₱<span id="depositBalance">0.00</span></p>
       <p id="depositAccountId" class="subtext" style="font-weight: lighter; color: dimgray; font-size: 15px;"></p>
+      <p id="depositAccountStatus" class="subtext" style="font-weight: lighter; color: dodgerblue; font-size: 15px;"></p>
     </div>
 
     <!-- Go Back -->
@@ -93,8 +94,7 @@
     </div>
   </div>
 
-  <script>
-        // --- utilities: normalize client objects to snake_case ---
+    <script>
         function normalizeClientObject(raw) {
             if (!raw || typeof raw !== 'object') return {};
             return {
@@ -136,6 +136,7 @@
         const formContainer = document.getElementById('formContainer');
         const subtypeTiles = document.getElementById('subtypeTiles');
         const depositBalance = document.getElementById('depositBalance');
+        const depositAccountStatus = document.getElementById('depositAccountStatus');
         const goBackBtn = document.getElementById('goBackBtn');
         const freezeBtn = document.getElementById('freezeBtn');
         const transactionContainer = document.getElementById('transactionContainer');
@@ -156,36 +157,108 @@
                 if (!res.ok) throw new Error('Failed to fetch accounts');
                 const accounts = await res.json();
 
-                accounts.forEach(acc => {
-                    if (acc.type_name === 'Deposit') {
-                        clientData.deposit_type_id = acc.type_id;
-                        clientData.deposit_balance = acc.balance;
-                    } else if (acc.type_name === 'Savings') {
-                        clientData.savings_type_id = acc.type_id;
-                        clientData.savings_balance = acc.balance;
-                    } else if (acc.type_name === 'Loan') {
-                        clientData.loan_type_id = acc.type_id;
-                        clientData.loan_balance = acc.balance;
-                    }
-                });
+                const depositAcc = accounts.find(acc => acc.type_name === 'Deposit');
+                if (depositAcc) {
+                    clientData.deposit_type_id = depositAcc.type_id;
+                    clientData.deposit_balance = depositAcc.balance;
+                    clientData.deposit_status = depositAcc.account_status;
+                }
 
                 saveClientData(clientData);
 
-                if (clientData.deposit_balance !== undefined && clientData.deposit_balance !== null) {
-                    depositBalance.textContent = parseFloat(clientData.deposit_balance).toFixed(2);
-                }
+                depositBalance.textContent = parseFloat(clientData.deposit_balance).toFixed(2);
+                document.getElementById("depositAccountId").textContent = `Account ID: ${clientData.deposit_type_id}`;
+                depositAccountStatus.textContent = `Status: ${clientData.deposit_status}`;
 
-                const depositAccountId = document.getElementById("depositAccountId");
-                    if (depositAccountId) {
-                        depositAccountId.textContent = `Account ID: ${clientData.deposit_type_id}`;
-                }
+                updateFreezeButton();
 
             } catch (err) {
                 console.error('Fetch accounts error:', err);
                 showModal('Could not fetch account info. Please log in again.');
             }
         }
-        fetchClientAccounts();
+
+        function updateFreezeButton() {
+            const status = clientData.deposit_status || 'Active';
+
+            switch (status) {
+                case 'Active':
+                    freezeBtn.textContent = 'Freeze Account';
+                    freezeBtn.disabled = false;
+                    break;
+
+                case 'Frozen':
+                    freezeBtn.textContent = 'Unfreeze Account';
+                    freezeBtn.disabled = false;
+                    break;
+
+                case 'pending_freeze':
+                case 'Pending Freeze':
+                    freezeBtn.textContent = 'Freeze Pending...';
+                    freezeBtn.disabled = true;
+                    break;
+
+                case 'pending_unfreeze':
+                case 'Pending Unfreeze':
+                    freezeBtn.textContent = 'Unfreeze Pending...';
+                    freezeBtn.disabled = true;
+                    break;
+
+                default:
+                    freezeBtn.textContent = 'Freeze Account';
+                    freezeBtn.disabled = false;
+            }
+
+            depositAccountStatus.textContent = `Status: ${status}`;
+        }
+
+
+        async function updateFreezeStatus() {
+            if (!clientData.deposit_type_id) {
+                return showModal('Account type not found.');
+            }
+
+            const current = clientData.deposit_status;
+            let action;
+
+            // Decide whether to freeze or unfreeze
+            if (current === 'Active') {
+                action = 'freeze';
+            } else if (current === 'Frozen') {
+                action = 'unfreeze';
+            } else {
+                return showModal('Account request is already pending.');
+            }
+
+            try {
+                const res = await fetch(`/api/client/account/${clientData.deposit_type_id}/${action}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${clientToken}` }
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    return showModal(data.message || 'Unable to update status.');
+                }
+
+                // Update UI with pending status
+                clientData.deposit_status = action === 'freeze'
+                    ? 'Pending Freeze'
+                    : 'Pending Unfreeze';
+
+                saveClientData(clientData);
+                updateFreezeButton();
+
+                showModal(data.message);
+
+            } catch (err) {
+                console.error(err);
+                showModal('Failed to update freeze status.');
+            }
+        }
+
+        freezeBtn.addEventListener('click', updateFreezeStatus);
 
         hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
         document.getElementById('home').onclick = () => location.href = 'home.html';
@@ -199,7 +272,7 @@
         };
         document.getElementById('home').style.backgroundColor = 'var(--accent-color)';
         document.getElementById('home').style.color = '#000';
-        
+
         async function postTransaction(url, data) {
             try {
                 const res = await fetch(url, {
@@ -219,60 +292,7 @@
             }
         }
 
-        async function applyFreezeStatus() {
-            const statusKey = `deposit_status_${clientId}`;
-            let status = localStorage.getItem(statusKey) || 'active';
-
-            function updateUI() {
-                document.querySelectorAll('.account-card').forEach(tile => {
-                    if (status !== 'active') {
-                        if (tile.id !== 'historyTile') tile.classList.add('account-closed');
-                    } else {
-                        tile.classList.remove('account-closed');
-                    }
-                });
-                if (status === 'active') freezeBtn.textContent = 'Freeze Account';
-                if (status === 'pending_freeze') freezeBtn.textContent = 'Freeze Pending...';
-                if (status === 'frozen') freezeBtn.textContent = 'Unfreeze Account';
-                if (status === 'pending_unfreeze') freezeBtn.textContent = 'Unfreeze Pending...';
-            }
-            updateUI();
-
-            freezeBtn.onclick = async () => {
-                if (!clientData.deposit_type_id) return showModal('Account type not found.');
-
-                if (status === 'active' || status === 'frozen') {
-                    const action = status === 'active' ? 'freeze' : 'unfreeze';
-                    showModal(
-                        `Are you sure you want to ${action} this account?`,
-                        `<div style="display:flex; gap:10px; justify-content:center;">
-                            <button id='confirmFreezeUnfreeze'>Proceed</button>
-                            <button id='cancelFreezeUnfreeze'>Cancel</button>
-                        </div>`
-                    );
-                    document.getElementById('confirmFreezeUnfreeze').onclick = async () => {
-                        try {
-                            const res = await fetch(`/api/client/account/${clientData.deposit_type_id}/freeze`, {
-                                method: 'PUT',
-                                headers: { 'Authorization': `Bearer ${clientToken}` }
-                            });
-                            const json = await res.json();
-                            status = status === 'active' ? 'pending_freeze' : 'pending_unfreeze';
-                            localStorage.setItem(statusKey, status);
-                            updateUI();
-                            showModal(json.message);
-                        } catch (err) {
-                            showModal('Failed to update freeze status.');
-                        }
-                    };
-                    document.getElementById('cancelFreezeUnfreeze').onclick = () => modal.classList.remove('active');
-                } else {
-                    showModal("A request is already being processed.");
-                }
-            };
-        }
-        applyFreezeStatus();
-
+        // --- Transaction subtypes logic (deposit/withdraw/transfer/history) ---
         const subtypes = [
             { id: 'depositTile', type: 'deposit', route: '/api/transactions/deposit' },
             { id: 'withdrawTile', type: 'withdraw', route: '/api/transactions/withdraw' },
@@ -357,7 +377,6 @@
 
                         const result = await postTransaction(sub.route, payload);
 
-                        // --- Updated balance logic ---
                         if (result.newBalance !== undefined && result.newBalance !== null) {
                             clientData.deposit_balance = parseFloat(result.newBalance);
                         } else {
@@ -371,13 +390,9 @@
                         await fetchClientAccounts();
 
                         if (sub.type === 'transfer') {
-                            showModal(
-                            `Transfer of ₱${amount.toFixed(2)} successful.<br>Sent to Account ID: ${payload.toTypeId}.`
-                            );
+                            showModal(`Transfer of ₱${amount.toFixed(2)} successful.<br>Sent to Account ID: ${payload.toTypeId}.`);
                         } else {
-                            showModal(
-                            `${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} of ₱${amount.toFixed(2)} successful.`
-                            );
+                            showModal(`${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} of ₱${amount.toFixed(2)} successful.`);
                         }
                     };
                 }
@@ -392,6 +407,8 @@
             subtypeTiles.style.display = 'flex';
             goBackBtn.style.display = 'none';
         };
+
+        fetchClientAccounts();
     </script>
 </body>
 </html>

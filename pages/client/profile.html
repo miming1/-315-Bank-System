@@ -102,6 +102,62 @@
     const deleteBtn = document.getElementById('deleteBtn');
     const deleteStatusLabel = document.getElementById('deleteStatusLabel');
 
+    let editMode = false;
+    let deleteStatus = 'none';
+
+    function showError(msg) {
+      messageDiv.textContent = msg;
+      messageDiv.className = "message error";
+    }
+
+    function updateDeleteLabel() {
+      if (deleteStatus === 'pending') deleteStatusLabel.textContent = "Deletion Request Pending Admin Approval";
+      else if (deleteStatus === 'approved') deleteStatusLabel.textContent = "Account Approved for Deletion (Please Withdraw Balances)";
+      else deleteStatusLabel.textContent = "";
+    }
+
+    function saveDeleteStatus(newStatus) {
+      deleteStatus = newStatus;
+      updateDeleteLabel();
+    }
+
+    function redirectToLogin(message) {
+      alert(message);
+      localStorage.removeItem('clientToken');
+      localStorage.removeItem('clientData'); // optional: clear client info
+      window.location.href = '../index.html';
+    }
+
+    async function loadProfileAndStatus() {
+      if (!clientToken) return redirectToLogin("No token found. Please login again.");
+
+      try {
+        const res = await fetch('/api/client/profile/me', {
+          headers: { 'Authorization': `Bearer ${clientToken}` }
+        });
+
+        if (res.status === 404) return redirectToLogin("Client not found or deleted. Redirecting to login...");
+
+        const data = await res.json();
+        if (!res.ok) return showError(data.message || "Failed to load profile.");
+
+        // Populate profile fields
+        viewName.textContent = data.full_name;
+        viewEmail.textContent = data.email;
+        editName.value = data.full_name;
+        editEmail.value = data.email;
+
+        // Set delete status
+        if (data.status === 'pending_deletion') saveDeleteStatus('pending');
+        else if (data.status === 'approved_deletion') saveDeleteStatus('approved');
+        else saveDeleteStatus('none');
+
+      } catch (err) {
+        console.error(err);
+        showError("Server error while fetching profile.");
+      }
+    }
+
     // Sidebar navigation
     document.getElementById('dashboard').addEventListener('click', () => window.location.href = 'home.html');
     document.getElementById('history').addEventListener('click', () => window.location.href = 'history.html');
@@ -112,38 +168,17 @@
       window.location.href = '../index.html';
     });
 
+    // Go back button
     goBack.addEventListener('click', () => window.location.href = 'home.html');
 
-    let editMode = false;
-
-    async function loadProfile() {
-      if (!clientToken) return showError("No token found. Please login again.");
-
+    // Load profile & delete status
+    (async () => {
       try {
-        const res = await fetch('/api/client/profile/me', {
-          method: 'GET',
-          headers: { 'Authorization': `Bearer ${clientToken}` }
-        });
-        const data = await res.json();
-
-        if (!res.ok) return showError(data.message || "Failed to load profile.");
-
-        viewName.textContent = data.full_name;
-        viewEmail.textContent = data.email;
-        editName.value = data.full_name;
-        editEmail.value = data.email;
+        await loadProfileAndStatus();
       } catch (err) {
-        console.error(err);
-        showError("Server error while fetching profile.");
+        console.error("Error loading profile/status:", err);
       }
-    }
-
-    function showError(msg) {
-      messageDiv.textContent = msg;
-      messageDiv.className = "message error";
-    }
-
-    loadProfile();
+    })();
 
     // Edit / Save Profile
     editBtn.addEventListener('click', async () => {
@@ -173,7 +208,6 @@
             body: JSON.stringify(payload)
           });
           const data = await res.json();
-
           if (res.ok) {
             viewName.textContent = payload.fullName;
             viewEmail.textContent = payload.email;
@@ -182,7 +216,6 @@
             clientData.full_name = payload.fullName;
             clientData.email = payload.email;
             localStorage.setItem('clientData', JSON.stringify(clientData));
-
             editMode = false;
             viewName.style.display = 'inline';
             viewEmail.style.display = 'inline';
@@ -191,7 +224,6 @@
             editEmail.style.display = 'none';
             editPassword.style.display = 'none';
             editBtn.textContent = "Edit Profile";
-
             messageDiv.textContent = "Profile updated successfully!";
             messageDiv.className = "message success";
           } else {
@@ -212,65 +244,81 @@
     const accountMessage = document.getElementById('accountMessage');
     const modalActions = document.getElementById('modalActions');
 
-    let deleteStatus = localStorage.getItem('delete_status') || 'none';
-    updateDeleteLabel();
-
-    function updateDeleteLabel() {
-      if(deleteStatus === 'pending') deleteStatusLabel.textContent = "Deletion Request Pending Admin Approval";
-      else if(deleteStatus === 'approved') deleteStatusLabel.textContent = "Account Approved for Deletion (Please Withdraw Balances)";
-      else deleteStatusLabel.textContent = "";
-    }
-
     modalClose.addEventListener('click', () => modal.classList.remove('active'));
-    function showModal(message, actionsHTML=''){
+    function showModal(message, actionsHTML = '') {
       accountMessage.innerHTML = message;
       modalActions.innerHTML = actionsHTML;
       modal.classList.add('active');
     }
 
-    function saveDeleteStatus(newStatus){
-      deleteStatus = newStatus;
-      localStorage.setItem('delete_status', newStatus);
-      updateDeleteLabel();
-    }
+    deleteBtn.addEventListener('click', async () => {
+      if (deleteStatus !== 'none') {
+        showModal(
+          deleteStatus === 'pending'
+            ? "Your deletion request is already pending admin approval."
+            : "Your account is approved for deletion. Please withdraw remaining balances."
+        );
+        return;
+      }
 
-    deleteBtn.addEventListener('click', () => {
-      if(deleteStatus === 'none'){
+      try {
+        const res = await fetch('/api/client/accounts', {
+          headers: { 'Authorization': `Bearer ${clientToken}` }
+        });
+        const data = await res.json();
+        const hasBalance = Array.isArray(data) && data.some(acc => Number(acc.balance) > 0);
+
+        if (hasBalance) {
+          showModal("You still have remaining balances in one or more accounts. Please withdraw all balances before requesting account deletion.");
+          return;
+        }
+
         showModal(
           "Are you sure you want to request account deletion?",
           `<button id='confirmDelete'>Proceed</button>
-           <button id='cancelDelete'>Cancel</button>`
+          <button id='cancelDelete'>Cancel</button>`
         );
 
-        document.getElementById('confirmDelete').onclick = () => {
-          saveDeleteStatus('pending');
-          showModal("Your deletion request has been sent. Waiting for admin approval.");
+        document.getElementById('confirmDelete').onclick = async () => {
+          try {
+            const deleteRes = await fetch('/api/client/delete-request', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${clientToken}` }
+            });
+            const deleteData = await deleteRes.json();
+            if (deleteRes.ok) {
+              saveDeleteStatus('pending');
+              showModal(deleteData.message || "Your deletion request has been sent. Waiting for admin approval.");
+            } else {
+              showModal(deleteData.message || "Failed to request deletion.");
+            }
+          } catch (err) {
+            console.error(err);
+            showModal("Server error while requesting deletion.");
+          }
         };
+
         document.getElementById('cancelDelete').onclick = () => modal.classList.remove('active');
 
-      } else if(deleteStatus === 'pending'){
-        showModal("Your deletion request is already pending admin approval.");
-      } else if(deleteStatus === 'approved'){
-        showModal("Your account is approved for deletion. Please withdraw remaining balances.");
+      } catch (err) {
+        console.error(err);
+        showModal("Server error while checking account balances.");
       }
     });
 
-    //check if the user have read the notififications
+    // Check unread notifications
     async function checkUnreadNotifications() {
-        try {
-          const res = await fetch("/api/client/notifications/unread", {
-            headers: { "Authorization": "Bearer " + localStorage.getItem("clientToken") }
-          });
-
-          const data = await res.json();
-
-          const notifDot = document.getElementById("notifDot");
-          notifDot.style.display = data.unread > 0 ? "inline-block" : "none";
-
-        } catch (err) {
-          console.error("Unread check failed:", err);
-        }
+      try {
+        const res = await fetch("/api/client/notifications/unread", {
+          headers: { "Authorization": `Bearer " + clientToken` }
+        });
+        const data = await res.json();
+        const notifDot = document.getElementById("notifDot");
+        notifDot.style.display = data.unread > 0 ? "inline-block" : "none";
+      } catch (err) {
+        console.error("Unread check failed:", err);
       }
+    }
 
     checkUnreadNotifications();
   </script>
