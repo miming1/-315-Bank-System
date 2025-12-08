@@ -30,6 +30,7 @@
     <div class="balance-container">
       <p>Balance: ₱<span id="savingsBalance">0.00</span></p>
       <p id="savingsAccountId" class="subtext" style="font-weight: lighter; color: dimgray; font-size: 15px;"></p>
+      <p id="savingsAccountStatus" class="subtext" style="font-weight: lighter; color: dimgray; font-size: 15px;"></p>
     </div>
 
     <!-- Go Back Button -->
@@ -87,21 +88,50 @@
       </table>
     </div>
 
-    <!-- Modal -->
-    <div class="modal" id="accountModal">
+    <!-- Modals (base + freeze / pending) -->
+    <div class="modal" id="accountModal" style="display:none;">
       <div class="modal-content">
         <span class="modal-close" id="modalClose">&times;</span>
         <p id="accountMessage"></p>
         <div id="modalActions" style="margin-top:20px; text-align:center;"></div>
       </div>
     </div>
+
+    <!-- Freeze Warning Modal (kept for compatibility) -->
+    <div class="modal" id="freezeWarningModal" style="display:none;">
+      <div class="modal-content">
+        <span class="modal-close" id="freezeWarningClose">&times;</span>
+        <p>Your account is currently frozen or freeze/unfreeze request is pending. Action not permitted.</p>
+      </div>
+    </div>
+
+    <!-- Pending Action Modal -->
+    <div class="modal" id="pendingModal" style="display:none;">
+      <div class="modal-content">
+        <span class="modal-close" id="pendingModalClose">&times;</span>
+        <p id="pendingModalText"></p>
+        <div style="text-align:center; margin-top:20px;">
+          <button class="button" id="cancelRequestBtn">Cancel Request</button>
+          <button class="button" id="pendingCloseBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlay + feature-unavailable modal (ADDED to show when tile locked) -->
+    <div id="modalOverlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:999;"></div>
+
+    <div class="modal" id="featureUnavailableModal" style="display:none; z-index:1000;">
+      <div class="modal-content">
+        <span class="modal-close" id="featureUnavailableClose">&times;</span>
+        <p>This feature is unavailable while the account is frozen or a freeze/unfreeze request is pending.</p>
+      </div>
+    </div>
+
   </div>
 
   <script>
-    // ---------------------------
-    // Utilities: normalize client
-    // ---------------------------
-    function normalizeClientObject(raw) {
+    /* ====== Utilities & Normalization ====== */
+    function normalizeClientObject(raw = {}) {
       if (!raw || typeof raw !== 'object') return {};
       return {
         user_id: raw.user_id || raw.id || null,
@@ -123,19 +153,28 @@
           ? raw.loan_balance
           : (raw.loanBalance !== undefined ? raw.loanBalance : 0),
 
+        savings_status: raw.savings_status || raw.savingsStatus || null,
+
         ...raw
       };
     }
 
-    // ---------------------------
-    // State & DOM
-    // ---------------------------
-    const token = localStorage.getItem('clientToken');
-    if (!token) location.href = '../index.html';
+    function normalizeStatus(status) {
+      if (status === null || status === undefined) return null;
+      const s = String(status).trim().toLowerCase();
+      if (s === 'open' || s === 'active') return 'Open';
+      if (s === 'frozen') return 'Frozen';
+      if (s === 'pending freeze' || s === 'pending_freeze' || s === 'pendingfreeze') return 'Pending Freeze';
+      if (s === 'pending unfreeze' || s === 'pending_unfreeze' || s === 'pendingunfreeze') return 'Pending Unfreeze';
+      return status;
+    }
 
+    /* ====== Local state ====== */
     let _rawClient = JSON.parse(localStorage.getItem('clientData')) || {};
     let clientData = normalizeClientObject(_rawClient);
-    const clientId = clientData?.user_id || null;
+    const clientToken = localStorage.getItem('clientToken') || '';
+    // initial normalize
+    clientData.savings_status = normalizeStatus(clientData.savings_status);
 
     function saveClientData(updated) {
       const normalized = normalizeClientObject(updated);
@@ -143,94 +182,405 @@
       clientData = normalized;
     }
 
-    const savingsBalance = document.getElementById('savingsBalance');
-    const formContainer = document.getElementById('formContainer');
-    const subtypeTiles = document.getElementById('subtypeTiles');
-    const goBackBtn = document.getElementById('goBackBtn');
-    const freezeBtn = document.getElementById('freezeBtn');
-    const transactionContainer = document.getElementById('transactionContainer');
-    const savingsMessage = document.getElementById('savingsMessage');
-
+    /* ====== Elements ====== */
     const sidebar = document.getElementById('sidebar');
     const hamburger = document.getElementById('hamburger');
+
     const modal = document.getElementById('accountModal');
     const modalClose = document.getElementById('modalClose');
     const accountMessage = document.getElementById('accountMessage');
     const modalActions = document.getElementById('modalActions');
 
-    modalClose.addEventListener('click', () => modal.classList.remove('active'));
+    const pendingModal = document.getElementById('pendingModal');
+    const pendingModalClose = document.getElementById('pendingModalClose');
+    const pendingCloseBtn = document.getElementById('pendingCloseBtn');
+    const cancelRequestBtn = document.getElementById('cancelRequestBtn');
+    const pendingModalText = document.getElementById('pendingModalText');
+
+    const freezeWarningModal = document.getElementById('freezeWarningModal');
+    const freezeWarningClose = document.getElementById('freezeWarningClose');
+
+    // feature-unavailable modal + overlay
+    const modalOverlay = document.getElementById('modalOverlay');
+    const featureUnavailableModal = document.getElementById('featureUnavailableModal');
+    const featureUnavailableClose = document.getElementById('featureUnavailableClose');
+
+    const formContainer = document.getElementById('formContainer');
+    const subtypeTiles = document.getElementById('subtypeTiles');
+    const savingsBalance = document.getElementById('savingsBalance');
+    const savingsAccountId = document.getElementById('savingsAccountId');
+    const savingsAccountStatus = document.getElementById('savingsAccountStatus');
+    const goBackBtn = document.getElementById('goBackBtn');
+    const freezeBtn = document.getElementById('freezeBtn');
+    const transactionContainer = document.getElementById('transactionContainer');
+    const savingsMessage = document.getElementById('savingsMessage');
+
+    /* ====== Modal helpers ====== */
+    function openModal(el) { if (!el) return; el.style.display = 'flex'; }
+    function closeModal(el) { if (!el) return; el.style.display = 'none'; }
+
     function showModal(message, actionsHTML = '') {
+      if (!modal) { alert(message); return; }
       accountMessage.innerHTML = message;
       modalActions.innerHTML = actionsHTML;
-      modal.classList.add('active');
+      openModal(modal);
     }
 
-    // ---------------------------
-    // Fetch accounts
-    // ---------------------------
-    let savingsTypeId = clientData.savings_type_id || null;
+    modalClose?.addEventListener('click', () => closeModal(modal));
+    pendingModalClose?.addEventListener('click', () => closeModal(pendingModal));
+    pendingCloseBtn?.addEventListener('click', () => closeModal(pendingModal));
+    freezeWarningClose?.addEventListener('click', () => closeModal(freezeWarningModal));
 
+    // feature-unavailable handlers
+    featureUnavailableClose?.addEventListener('click', () => {
+      if (modalOverlay) modalOverlay.style.display = 'none';
+      if (featureUnavailableModal) featureUnavailableModal.style.display = 'none';
+    });
+
+    function showFeatureBlockedModal() {
+      if (modalOverlay) modalOverlay.style.display = 'block';
+      if (featureUnavailableModal) featureUnavailableModal.style.display = 'flex';
+    }
+
+    /* ====== Fetch / Update ====== */
     async function fetchClientAccounts() {
       try {
         const res = await fetch('/api/client/accounts', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 'Authorization': `Bearer ${clientToken}` }
         });
         if (!res.ok) throw new Error('Failed to fetch accounts');
         const accounts = await res.json();
 
-        accounts.forEach(acc => {
-          if (acc.type_name === 'Savings') {
-            clientData.savings_type_id = acc.type_id;
-            clientData.savings_balance = acc.balance;
-            savingsTypeId = acc.type_id;
-          } else if (acc.type_name === 'Deposit') {
-            clientData.deposit_type_id = acc.type_id;
-            clientData.deposit_balance = acc.balance;
-          } else if (acc.type_name === 'Loan') {
-            clientData.loan_type_id = acc.type_id;
-            clientData.loan_balance = acc.balance;
-          }
-        });
+        const savingsAcc = Array.isArray(accounts) ? accounts.find(acc => acc.type_name === 'Savings') : null;
+        if (savingsAcc) {
+          clientData.savings_type_id = savingsAcc.type_id;
+          clientData.savings_balance = savingsAcc.balance;
+          clientData.savings_status = normalizeStatus(savingsAcc.account_status || savingsAcc.status || savingsAcc.statusText);
+        } else {
+          clientData.savings_type_id = null;
+          clientData.savings_balance = 0;
+          clientData.savings_status = null;
+        }
 
         saveClientData(clientData);
+
         savingsBalance.textContent = parseFloat(clientData.savings_balance || 0).toFixed(2);
+        savingsAccountId.textContent = `Account ID: ${clientData.savings_type_id || '-'}`;
+        savingsAccountStatus.textContent = `Status: ${clientData.savings_status || 'Unknown'}`;
 
-        const savingsAccountId = document.getElementById("savingsAccountId");
-        if (savingsAccountId) savingsAccountId.textContent = `Account ID: ${clientData.savings_type_id}`;
-
+        updateFreezeButton();
+        updateSubtypeTileLock();
       } catch (err) {
         console.error('Fetch accounts error:', err);
         showModal('Could not fetch account info. Please log in again.');
       }
     }
-    fetchClientAccounts();
 
-    // ---------------------------
-    // Sidebar navigation
-    // ---------------------------
-    hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
-    document.getElementById('home').onclick = () => location.href = 'home.html';
-    document.getElementById('historyNav').onclick = () => location.href = 'history.html';
-    document.getElementById('profile').onclick = () => location.href = 'profile.html';
-    document.getElementById('notifications').onclick = () => location.href = 'notifications.html';
-    document.getElementById('logout').onclick = () => {
-      localStorage.removeItem('clientToken');
-      localStorage.removeItem('clientData');
-      location.href = '../index.html';
-    };
-    document.getElementById('home').style.backgroundColor = 'var(--accent-color)';
-    document.getElementById('home').style.color = '#000';
+    /* ====== Freeze button logic ====== */
+    function updateFreezeButton() {
+      const status = clientData.savings_status;
 
-    // ---------------------------
-    // POST helper
-    // ---------------------------
+      switch (status) {
+        case 'Open':
+          freezeBtn.textContent = 'Freeze Account';
+          freezeBtn.disabled = false;
+          break;
+        case 'Frozen':
+          freezeBtn.textContent = 'Unfreeze Account';
+          freezeBtn.disabled = false;
+          break;
+        case 'Pending Freeze':
+          freezeBtn.textContent = 'Freeze Pending...';
+          freezeBtn.disabled = false;
+          break;
+        case 'Pending Unfreeze':
+          freezeBtn.textContent = 'Unfreeze Pending...';
+          freezeBtn.disabled = false;
+          break;
+        default:
+          freezeBtn.textContent = 'Freeze Account';
+          freezeBtn.disabled = false;
+      }
+    }
+
+    function openPendingModal() {
+      const s = clientData.savings_status;
+      const msg = (s === 'Pending Freeze')
+        ? 'Your freeze request is currently pending admin review. You can cancel the request if you want to stop it.'
+        : (s === 'Pending Unfreeze')
+        ? 'Your unfreeze request is currently pending admin review. You can cancel the request if you want to stop it.'
+        : 'Your request is being reviewed.';
+      if (pendingModalText) pendingModalText.textContent = msg;
+      openModal(pendingModal);
+    }
+
+    async function performClientFreezeAction(action) {
+      const typeId = clientData.savings_type_id;
+      if (!typeId) return showModal('Account type not found.');
+
+      try {
+        const res = await fetch(`/api/client/account/${typeId}/${action}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${clientToken}` }
+        });
+        let data;
+        try { data = await res.json(); } catch (e) { data = {}; }
+        if (!res.ok) {
+          return showModal(data.message || 'Unable to update status.');
+        }
+
+        // re-fetch authoritative state
+        await fetchClientAccounts();
+        showModal(data.message || 'Request submitted.');
+      } catch (err) {
+        console.error(err);
+        showModal('Failed to submit request.');
+      }
+    }
+
+    /* Freeze button click handler */
+    freezeBtn?.addEventListener('click', () => {
+      const status = clientData.savings_status;
+      if (status === 'Pending Freeze' || status === 'Pending Unfreeze') {
+        openPendingModal();
+        return;
+      }
+
+      const action = (status === 'Frozen') ? 'unfreeze' : 'freeze';
+      const message = (action === 'freeze')
+        ? 'Are you sure you want to request a freeze on this account? Transactions will be paused while admin reviews this request.'
+        : 'Are you sure you want to request an unfreeze of this account?';
+
+      showModal(message,
+        `<div style="display:flex; gap:10px; justify-content:center;">
+           <button id='confirmProceed'>Proceed</button>
+           <button id='cancelProceed'>Cancel</button>
+         </div>`);
+
+      document.getElementById('cancelProceed').onclick = () => closeModal(modal);
+      document.getElementById('confirmProceed').onclick = async () => {
+        closeModal(modal);
+        await performClientFreezeAction(action);
+      };
+    });
+
+    /* Cancel pending request */
+    cancelRequestBtn?.addEventListener('click', async () => {
+      if (!confirm('Cancel the pending request? This will revert to the previous account state.')) return;
+      const typeId = clientData.savings_type_id;
+      if (!typeId) return showModal('Account type not found.');
+
+      try {
+        const res = await fetch(`/api/client/account/${typeId}/cancel`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${clientToken}` }
+        });
+        let data;
+        try { data = await res.json(); } catch (_) { data = {}; }
+        if (!res.ok) return showModal(data.message || 'Failed to cancel request.');
+
+        await fetchClientAccounts();
+        showModal(data.message || 'Request canceled.');
+        closeModal(pendingModal);
+      } catch (err) {
+        console.error(err);
+        showModal('Failed to cancel request.');
+      }
+    });
+
+    /* ====== Tile locking & click handling ====== */
+    function updateSubtypeTileLock() {
+      const status = clientData.savings_status;
+      const locked = (status === 'Frozen' || status === 'Pending Freeze' || status === 'Pending Unfreeze');
+
+      // select all account tiles
+      const tiles = document.querySelectorAll('.card.account-card');
+      tiles.forEach(tile => {
+        const id = tile.id;
+        if (id === 'historyTile') {
+          tile.classList.remove('disabled');
+          tile.style.opacity = '1';
+          tile.dataset.locked = 'false';
+          return;
+        }
+        if (locked) {
+          tile.classList.add('disabled');
+          tile.style.opacity = '0.5';
+          tile.dataset.locked = 'true';
+        } else {
+          tile.classList.remove('disabled');
+          tile.style.opacity = '1';
+          tile.dataset.locked = 'false';
+        }
+      });
+    }
+
+    function setupSubtypeTileHandlers() {
+      const mapping = {
+        depositTile: { type: 'deposit', route: '/api/transactions/deposit' },
+        withdrawTile: { type: 'withdraw', route: '/api/transactions/withdraw' },
+        transferTile: { type: 'transfer', route: '/api/transactions/transfer' },
+        historyTile: { type: 'history' },
+        summaryTile: { type: 'summary' }
+      };
+
+      Object.keys(mapping).forEach(tileId => {
+        const element = document.getElementById(tileId);
+        if (!element) return;
+
+        element.addEventListener('click', async (e) => {
+          // If locked, show the feature-unavailable modal
+          if (element.dataset.locked === 'true') {
+            showFeatureBlockedModal();
+            return;
+          }
+
+          const sub = mapping[tileId];
+
+          // HISTORY
+          if (sub.type === 'history') {
+            subtypeTiles.style.display = 'none';
+            formContainer.style.display = 'none';
+            transactionContainer.style.display = 'block';
+            goBackBtn.style.display = 'inline-block';
+            freezeBtn.style.display = 'none';
+            savingsMessage.textContent = 'Fetching transactions...';
+
+            try {
+              const res = await fetch(`/api/transactions/history/account/Savings`, {
+                headers: { 'Authorization': `Bearer ${clientToken}` }
+              });
+              const data = await res.json();
+              savingsMessage.textContent = `Fetched ${data.length} transactions.`;
+
+              const tbody = document.querySelector('#savingsTransactionTable tbody');
+              tbody.innerHTML = "";
+              data.forEach(tx => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                  <td>${new Date(tx.transaction_date).toLocaleString()}</td>
+                  <td>${tx.transaction_type}</td>
+                  <td>₱${parseFloat(tx.amount).toFixed(2)}</td>
+                  <td>${tx.description || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+              });
+            } catch (err) {
+              savingsMessage.textContent = 'Failed to fetch transactions';
+              savingsMessage.classList.add('error');
+              console.error(err);
+            }
+            return;
+          }
+
+          // SUMMARY
+          if (sub.type === 'summary') {
+            subtypeTiles.style.display = 'none';
+            transactionContainer.style.display = 'none';
+            formContainer.innerHTML = '<p>Loading summary...</p>';
+            formContainer.style.display = 'flex';
+            freezeBtn.style.display = 'none';
+            goBackBtn.style.display = 'inline-block';
+
+            try {
+              const res = await fetch(`/api/transactions/savings/summary`, {
+                headers: { 'Authorization': `Bearer ${clientToken}` }
+              });
+              const summary = await res.json();
+
+              clientData.savings_balance = summary.currentSavings || 0;
+              saveClientData(clientData);
+              savingsBalance.textContent = parseFloat(clientData.savings_balance).toFixed(2);
+
+              const totalDeposits = summary.totalDeposits || 0;
+              const totalWithdrawals = summary.totalWithdrawals || 0;
+              const totalInterest = summary.interestEarned || 0;
+              const net = summary.currentSavings || 0;
+
+              formContainer.innerHTML = `
+                <div class="form" style="display:flex; justify-content:center;">
+                  <div class="card account-card summary-card" style="padding:20px; flex-direction:column; align-items:center; width:320px;">
+                    <h2 style="margin-bottom:15px;">Savings Summary</h2>
+                    <p>Total Deposits: ₱${totalDeposits.toFixed(2)}</p>
+                    <p>Total Withdrawals: ₱${totalWithdrawals.toFixed(2)}</p>
+                    <p>Interest Earned: ₱${totalInterest.toFixed(2)}</p>
+                    <hr style="width:100%; margin:12px 0;">
+                    <p><strong>Current Saved: ₱${net.toFixed(2)}</strong></p>
+                  </div>
+                </div>
+              `;
+            } catch (err) {
+              console.error('Summary load error', err);
+              formContainer.innerHTML = '<p>Failed to load summary.</p>';
+            }
+            return;
+          }
+
+          // DEPOSIT / WITHDRAW / TRANSFER
+          let formHtml = `<form id="${sub.type}Form"><h2>${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} Money</h2>`;
+          if (sub.type === 'transfer') {
+            formHtml += `<input type="number" placeholder="Recipient Account ID" required>`;
+          }
+          formHtml += `<input type="number" placeholder="Amount" required>`;
+          formHtml += `<button type="submit">${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)}</button></form>`;
+
+          formContainer.innerHTML = formHtml;
+          formContainer.style.display = 'block';
+          subtypeTiles.style.display = 'none';
+          transactionContainer.style.display = 'none';
+          freezeBtn.style.display = 'none';
+          goBackBtn.style.display = 'inline-block';
+
+          const formEl = document.getElementById(`${sub.type}Form`);
+          formEl.onsubmit = async e => {
+            e.preventDefault();
+            const typeId = clientData.savings_type_id;
+            let amount, toTypeId;
+            if (sub.type === 'transfer') {
+              toTypeId = parseInt(e.target[0].value);
+              amount = parseFloat(e.target[1].value);
+            } else {
+              amount = parseFloat(e.target[0].value);
+            }
+            if (isNaN(amount) || amount <= 0) return showModal('Enter a valid amount.');
+
+            const payload = sub.type === 'transfer' ? { fromTypeId: typeId, toTypeId, amount } : { typeId, amount };
+
+            try {
+              const result = await postTransaction(sub.route, payload);
+              if (result.newBalance !== undefined && result.newBalance !== null) {
+                clientData.savings_balance = parseFloat(result.newBalance);
+              } else {
+                clientData.savings_balance = sub.type === 'deposit'
+                  ? (parseFloat(clientData.savings_balance || 0) + amount)
+                  : (parseFloat(clientData.savings_balance || 0) - amount);
+              }
+              saveClientData(clientData);
+              savingsBalance.textContent = parseFloat(clientData.savings_balance).toFixed(2);
+              await fetchClientAccounts();
+
+              if (sub.type === 'transfer') {
+                showModal(`Transfer of ₱${amount.toFixed(2)} successful.<br>Sent to Account ID: ${payload.toTypeId}.`);
+              } else {
+                showModal(`${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} of ₱${amount.toFixed(2)} successful.`);
+              }
+            } catch (err) {
+              console.error(err);
+              showModal('Transaction failed.');
+            }
+          };
+        });
+      });
+    }
+
+    /* ====== Transaction helper ====== */
     async function postTransaction(url, data) {
       try {
         const res = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${clientToken}`
           },
           body: JSON.stringify(data)
         });
@@ -243,235 +593,42 @@
       }
     }
 
-    // ---------------------------
-    // Freeze status (savings-specific)
-    // ---------------------------
-    const statusKey = `savings_status_${clientId}`;
-    let status = localStorage.getItem(statusKey) || 'active';
-
-    function applyStatusUI() {
-      document.querySelectorAll('.account-card').forEach(tile => {
-        if (status !== 'active') {
-          if (tile.id !== 'historyTile') tile.classList.add('account-closed');
-        } else tile.classList.remove('account-closed');
-      });
-      if (status === 'active') freezeBtn.textContent = 'Freeze Account';
-      if (status === 'pending_freeze') freezeBtn.textContent = 'Freeze Pending...';
-      if (status === 'frozen') freezeBtn.textContent = 'Unfreeze Account';
-      if (status === 'pending_unfreeze') freezeBtn.textContent = 'Unfreeze Pending...';
-    }
-    applyStatusUI();
-
-    function saveStatus(newStatus) {
-      status = newStatus;
-      localStorage.setItem(statusKey, newStatus);
-      applyStatusUI();
-    }
-
-    freezeBtn.addEventListener('click', () => {
-      if (status === 'active') {
-        showModal("Are you sure you want to freeze this account?",
-          `<div style="display:flex; gap:10px; justify-content:center;">
-            <button id='confirmFreeze'>Proceed</button>
-            <button id='cancelFreeze'>Cancel</button>
-          </div>`);
-        document.getElementById('confirmFreeze').onclick = () => {
-          saveStatus('pending_freeze');
-          showModal("Freeze request sent. Awaiting admin approval.");
-        };
-        document.getElementById('cancelFreeze').onclick = () => modal.classList.remove('active');
-      } else if (status === 'frozen') {
-        showModal("Request to unfreeze this account?",
-          `<div style="display:flex; gap:10px; justify-content:center;">
-            <button id='confirmUnfreeze'>Proceed</button>
-            <button id='cancelUnfreeze'>Cancel</button>
-          </div>`);
-        document.getElementById('confirmUnfreeze').onclick = () => {
-          saveStatus('pending_unfreeze');
-          showModal("Unfreeze request sent. Waiting for admin approval.");
-        };
-        document.getElementById('cancelUnfreeze').onclick = () => modal.classList.remove('active');
-      } else {
-        showModal("A request is already being processed.");
-      }
-    });
-
-    function tileBlocked(){ return status !== 'active'; }
-    function blockedClick(){ showModal("This account is currently on hold due to a freeze/unfreeze request."); }
-
-    // ---------------------------
-    // Subtype actions (deposit / withdraw / transfer / summary / history)
-    // ---------------------------
-    const subtypes = [
-      { id: 'depositTile', type: 'deposit', route: '/api/transactions/deposit' },
-      { id: 'withdrawTile', type: 'withdraw', route: '/api/transactions/withdraw' },
-      { id: 'transferTile', type: 'transfer', route: '/api/transactions/transfer' },
-      { id: 'summaryTile', type: 'summary' },
-      { id: 'historyTile', type: 'history' }
-    ];
-
-    subtypes.forEach(sub => {
-      const el = document.getElementById(sub.id);
-      if (!el) return;
-
-      el.onclick = async () => {
-        if (tileBlocked()) { blockedClick(); return; }
-
-        // ensure latest type id/balance
-        if (!clientData.savings_type_id) await fetchClientAccounts();
-        const typeId = clientData.savings_type_id;
-
-        if (sub.type === 'history') {
-          // Transaction history
-          subtypeTiles.style.display = 'none';
-          formContainer.style.display = 'none';
-          transactionContainer.style.display = 'block';
-          goBackBtn.style.display = 'inline-block';
-          freezeBtn.style.display = 'none';
-          savingsMessage.textContent = 'Fetching transactions...';
-
-          try {
-            const res = await fetch(`/api/transactions/history/account/Savings`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            savingsMessage.textContent = `Fetched ${data.length} transactions.`;
-
-            const tbody = document.querySelector('#savingsTransactionTable tbody');
-            tbody.innerHTML = '';
-            data.forEach(tx => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = `
-                <td>${new Date(tx.transaction_date).toLocaleString()}</td>
-                <td>${tx.transaction_type}</td>
-                <td>₱${parseFloat(tx.amount).toFixed(2)}</td>
-                <td>${tx.description || '-'}</td>
-              `;
-              tbody.appendChild(tr);
-            });
-          } catch (err) {
-            savingsMessage.textContent = 'Failed to fetch transactions';
-            savingsMessage.classList.add('error');
-            console.error(err);
-          }
-
-        } else if (sub.type === 'summary') {
-          // Savings summary
-          subtypeTiles.style.display = 'none';
-          transactionContainer.style.display = 'none';
-          formContainer.innerHTML = '<p>Loading summary...</p>';
-          formContainer.style.display = 'flex';
-          freezeBtn.style.display = 'none';
-          goBackBtn.style.display = 'inline-block';
-
-          try {
-            const res = await fetch(`/api/transactions/savings/summary`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const summary = await res.json();
-
-            // Sync frontend with backend
-            clientData.savings_balance = summary.currentSavings || 0;
-            saveClientData(clientData);
-            savingsBalance.textContent = parseFloat(clientData.savings_balance).toFixed(2);
-
-            const totalDeposits = summary.totalDeposits || 0;
-            const totalWithdrawals = summary.totalWithdrawals || 0;
-            const totalInterest = summary.interestEarned || 0;
-            const net = summary.currentSavings || 0;
-
-            formContainer.innerHTML = `
-              <div class="form" style="display:flex; justify-content:center;">
-                <div class="card account-card summary-card" style="padding:20px; flex-direction:column; align-items:center; width:320px;">
-                  <h2 style="margin-bottom:15px;">Savings Summary</h2>
-                  <p>Total Deposits: ₱${totalDeposits.toFixed(2)}</p>
-                  <p>Total Withdrawals: ₱${totalWithdrawals.toFixed(2)}</p>
-                  <p>Interest Earned: ₱${totalInterest.toFixed(2)}</p>
-                  <hr style="width:100%; margin:12px 0;">
-                  <p><strong>Current Saved: ₱${net.toFixed(2)}</strong></p>
-                </div>
-              </div>
-            `;
-          } catch (err) {
-            console.error('Summary load error', err);
-            formContainer.innerHTML = '<p>Failed to load summary.</p>';
-          }
-
-        } else {
-          // Deposit / Withdraw / Transfer
-          let formHtml = `<form id="${sub.type}Form"><h2>${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} Money</h2>`;
-          if (sub.type === 'transfer') {
-            formHtml += `<input type="number" id="recipientId" placeholder="Recipient Account ID" required>`;
-          }
-          formHtml += `<input type="number" id="amountInput" placeholder="Amount" required>`;
-          formHtml += `<button type="submit">${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)}</button></form>`;
-
-          subtypeTiles.style.display = 'none';
-          transactionContainer.style.display = 'none';
-          formContainer.innerHTML = formHtml;
-          formContainer.style.display = 'flex';
-          freezeBtn.style.display = 'none';
-          goBackBtn.style.display = 'inline-block';
-
-          const formEl = document.getElementById(`${sub.type}Form`);
-          formEl.onsubmit = async (e) => {
-            e.preventDefault();
-            const amount = parseFloat(document.getElementById('amountInput').value);
-            if (isNaN(amount) || amount <= 0) return showModal('Enter a valid amount.');
-
-            let payload;
-            let endpoint = sub.route;
-
-            if (sub.type === 'transfer') {
-              const toTypeId = parseInt(document.getElementById('recipientId').value);
-              if (!toTypeId) return showModal('Enter recipient account id.');
-              if (toTypeId === typeId) return showModal('Cannot transfer to the same account.');
-              payload = { fromTypeId: typeId, toTypeId, amount };
-            } else {
-              payload = { typeId, amount };
-            }
-
-            try {
-              const result = await postTransaction(endpoint, payload);
-
-              // Sync frontend balance with backend if available
-              if (result.newBalance !== undefined && result.newBalance !== null) {
-                clientData.savings_balance = parseFloat(result.newBalance);
-              } else {
-                clientData.savings_balance = sub.type === 'deposit'
-                  ? (parseFloat(clientData.savings_balance || 0) + amount)
-                  : (parseFloat(clientData.savings_balance || 0) - amount);
-              }
-
-              saveClientData(clientData);
-              savingsBalance.textContent = parseFloat(clientData.savings_balance).toFixed(2);
-              await fetchClientAccounts();
-
-              if (sub.type === 'transfer') {
-                showModal(`Transfer of ₱${amount.toFixed(2)} successful.<br>Sent to Account ID: ${payload.toTypeId}.`);
-              } else {
-                showModal(`${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} of ₱${amount.toFixed(2)} successful.`);
-              }
-
-            } catch (err) {
-              console.error('Transaction error', err);
-            }
-          };
-        }
-      };
-    });
-
-    // ---------------------------
-    // Go back UI handler
-    // ---------------------------
-    goBackBtn.onclick = () => {
+    /* ====== Go Back button functionality ====== */
+    goBackBtn?.addEventListener('click', () => {
+      // hide any opened form or transaction view and restore tiles + freeze button
       formContainer.innerHTML = '';
       formContainer.style.display = 'none';
       transactionContainer.style.display = 'none';
       subtypeTiles.style.display = 'flex';
-      goBackBtn.style.display = 'none';
       freezeBtn.style.display = 'inline-block';
-    };
+      goBackBtn.style.display = 'none';
+    });
+
+    /* ====== Navigation / Sidebar highlight ====== */
+    document.getElementById('home')?.addEventListener('click', () => location.href = 'home.html');
+    document.getElementById('historyNav')?.addEventListener('click', () => location.href = 'history.html');
+    document.getElementById('profile')?.addEventListener('click', () => location.href = 'profile.html');
+    document.getElementById('notifications')?.addEventListener('click', () => location.href = 'notifications.html');
+    document.getElementById('logout')?.addEventListener('click', () => {
+      localStorage.removeItem('clientToken');
+      localStorage.removeItem('clientData');
+      location.href = '../index.html';
+    });
+
+    function highlightCurrentPage() {
+      const path = window.location.pathname;
+      const file = path.split('/').pop();
+      if (file === 'savings.html') {
+        document.getElementById('home').style.backgroundColor = 'var(--accent-color)';
+        document.getElementById('home').style.color = '#000';
+      }
+    }
+    highlightCurrentPage();
+
+    /* ====== Init ====== */
+    setupSubtypeTileHandlers();
+    fetchClientAccounts();
+
   </script>
 </body>
 </html>
