@@ -149,16 +149,36 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Incorrect password." });
     }
 
-    // 3️⃣ Create JWT
+    // 🟦 ADD THIS — define the variable BEFORE using it
+    let deletionCancelled = false;
+
+    // 3️⃣ If account is in final deletion phase, cancel it
+    if (client.status === "on_deletion") {
+      await db.query(
+        `UPDATE users 
+         SET status = 'Active',
+             final_deletion_at = NULL
+         WHERE user_id = ?`,
+        [client.user_id]
+      );
+
+      deletionCancelled = true; // 🟦 SET THE FLAG
+    }
+
+    // 4️⃣ Create JWT
     const token = jwt.sign(
       { id: client.user_id, email: client.email },
       JWT_SECRET,
       { expiresIn: "8h" }
     );
 
-    // 4️⃣ Response
+    // 5️⃣ Response
     res.json({
       message: "Login successful.",
+      deletionCancelled,  // <— NOW VALID
+      deletionMessage: deletionCancelled
+        ? "Your account deletion has been cancelled because you logged in."
+        : null,
       token,
       client: {
         id: client.user_id,
@@ -180,7 +200,7 @@ router.get("/accounts", authenticateClient, async (req, res) => {
   try {
     const clientId = req.clientId;
     const [accounts] = await db.query(
-      "SELECT type_id, type_name, balance FROM account_type WHERE user_id = ?",
+      "SELECT type_id, type_name, balance, account_status FROM account_type WHERE user_id = ?",
       [clientId]
     );
 
@@ -194,7 +214,6 @@ router.get("/accounts", authenticateClient, async (req, res) => {
   }
 });
 
-
 // ========================
 // 3️⃣ GET PROFILE
 // ========================
@@ -202,11 +221,17 @@ router.get("/profile/me", authenticateClient, async (req, res) => {
   try {
     const clientId = req.clientId;
     const [rows] = await db.query(
-      "SELECT user_id, full_name, email FROM users WHERE user_id = ?",
+      "SELECT user_id, full_name, email, status FROM users WHERE user_id = ?",
       [clientId]
     );
     if (rows.length === 0) return res.status(404).json({ message: "Client not found" });
-    res.json(rows[0]);
+    
+    res.json({
+      user_id: rows[0].user_id,
+      full_name: rows[0].full_name,
+      email: rows[0].email,
+      status: rows[0].status 
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -250,41 +275,99 @@ router.put("/profile/me", authenticateClient, async (req, res) => {
   }
 });
 
-// Request account freeze (client)
-router.put('/account/:accountId/freeze', async (req, res) => {
-    const { accountId } = req.params;
+// ========================
+// REQUEST FREEZE OF BANK ACCOUNT
+// ========================
+router.put('/account/:typeId/freeze', async (req, res) => {
+    const { typeId } = req.params;
 
     try {
-        const account = await prisma.user_account.update({
-            where: { account_id: Number(accountId) },
-            data: { account_status: 'pending_freeze' }
-        });
+        await db.query(
+            "UPDATE account_type SET account_status = 'Pending Freeze' WHERE type_id = ?",
+            [typeId]
+        );
 
-        return res.json({ success: true, account });
+        return res.json({ success: true, message: "Freeze request submitted." });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ success: false, message: 'Freeze request failed.' });
     }
 });
 
-
-// Request account unfreeze (client)
-router.put('/account/:accountId/unfreeze', async (req, res) => {
-    const { accountId } = req.params;
+// ========================
+// REQUEST UNFREEZE OF BANK ACCOUNT
+// ========================
+router.put('/account/:typeId/unfreeze', async (req, res) => {
+    const { typeId } = req.params;
 
     try {
-        const account = await prisma.user_account.update({
-            where: { account_id: Number(accountId) },
-            data: { account_status: 'pending_unfreeze' }
-        });
+        await db.query(
+            "UPDATE account_type SET account_status = 'Pending Unfreeze' WHERE type_id = ?",
+            [typeId]
+        );
 
-        return res.json({ success: true, account });
+        return res.json({ success: true, message: "Unfreeze request submitted." });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ success: false, message: 'Unfreeze request failed.' });
     }
 });
 
+// ========================
+// CANCEL FREEZE/UNFREEZE REQUEST
+// ========================
+router.put("/account/:typeId/cancel", authenticateClient, async (req, res) => {
+  const { typeId } = req.params;
+  const userId = req.clientId;
+
+  try {
+    // Query rows properly
+    const [rows] = await db.query(
+      "SELECT * FROM account_type WHERE type_id = ? AND user_id = ?",
+      [typeId, userId]
+    );
+
+    const account = rows[0];
+
+    if (!account) {
+      return res.status(404).json({ message: "Account not found." });
+    }
+
+    const currentStatus = account.account_status;
+
+    // Not in cancelable state
+    if (currentStatus !== "Pending Freeze" && currentStatus !== "Pending Unfreeze") {
+      return res.status(400).json({
+        message: "There is no pending request to cancel.",
+        account_status: currentStatus
+      });
+    }
+
+    // Option A rules
+    const newStatus =
+      currentStatus === "Pending Freeze" ? "Open" : "Frozen";
+
+    // Update DB
+    await db.query(
+      "UPDATE account_type SET account_status = ? WHERE type_id = ? AND user_id = ?",
+      [newStatus, typeId, userId]
+    );
+
+    return res.json({
+      message:
+        currentStatus === "Pending Freeze"
+          ? "Freeze request canceled. Account returned to Open."
+          : "Unfreeze request canceled. Account remains Frozen.",
+      account_status: newStatus,
+      type_id: typeId
+    });
+  } catch (error) {
+    console.error("Cancel request error:", error);
+    return res.status(500).json({
+      message: "Failed to cancel the request. Please try again."
+    });
+  }
+});
 
 // ========================
 // 6️⃣ DELETE ACCOUNT REQUEST
@@ -308,14 +391,58 @@ router.post("/delete-request", authenticateClient, async (req, res) => {
 
     // Optional: create notification
     await db.query(
-      "INSERT INTO notifications (user_id, message) VALUES (?, ?)",
-      [clientId, "Your account deletion request has been submitted and is pending admin approval."]
+      "INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)",
+      [clientId, "SCHEDULED_FOR_DELETION", "Your account deletion request has been submitted and is pending admin approval."]
     );
 
     res.json({ message: "Account deletion request submitted. Awaiting admin approval." });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error." });
+  }
+});
+
+// =========================
+// CANCEL DELETE REQUEST
+// =========================
+router.put("/delete-request/cancel", authenticateClient, async (req, res) => {
+  try {
+    const clientId = req.clientId;
+
+    // 1. Check if user is actually pending deletion
+    const [user] = await db.query(
+      "SELECT status FROM users WHERE user_id = ?",
+      [clientId]
+    );
+
+    if (!user || user.length === 0) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (user[0].status !== "pending_deletion") {
+      return res.status(400).json({
+        message: "There is no pending deletion request to cancel."
+      });
+    }
+
+    // 2. Cancel request → return user to active
+    await db.query(
+      "UPDATE users SET status = 'Active' WHERE user_id = ?",
+      [clientId]
+    );
+
+    // Optional: notify user
+    await db.query(
+      "INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)",
+      [clientId, "SCHEDULED_FOR_DELETION", "Your account deletion request has been canceled successfully."
+      ]
+    );
+
+    res.json({ message: "Deletion request canceled successfully." });
+
+  } catch (err) {
+    console.error("Cancel delete request error:", err);
+    res.status(500).json({ message: "Server error while canceling deletion request." });
   }
 });
 

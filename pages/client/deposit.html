@@ -40,22 +40,22 @@
 
     <!-- Subtype tiles -->
     <div class="dashboard subtype-dashboard" id="subtypeTiles">
-      <div class="card account-card account-open" id="depositTile">
+        <div class="card account-card account-open subtype-tile" id="depositTile" data-type="deposit">
         <h3>Deposit</h3>
         <p>Place funds into your account for safe keeping and future use.</p>
-      </div>
-      <div class="card account-card account-open" id="withdrawTile">
+        </div>
+        <div class="card account-card account-open subtype-tile" id="withdrawTile" data-type="withdraw">
         <h3>Withdraw</h3>
         <p>Take funds out of your account for personal or business use.</p>
-      </div>
-      <div class="card account-card account-open" id="transferTile">
+        </div>
+        <div class="card account-card account-open subtype-tile" id="transferTile" data-type="transfer">
         <h3>Transfer</h3>
         <p>Move funds securely between your accounts or to another user.</p>
-      </div>
-      <div class="card account-card account-open" id="historyTile">
+        </div>
+        <div class="card account-card account-open subtype-tile" id="historyTile" data-type="history">
         <h3>Transaction History</h3>
         <p>View all your deposit transactions.</p>
-      </div>
+        </div>
     </div>
 
     <!-- Freeze button -->
@@ -92,46 +92,118 @@
         <div id="modalActions" style="margin-top:20px; text-align:center;"></div>
       </div>
     </div>
+
+    <!-- Confirmation Modal (Freeze / Unfreeze) -->
+    <div id="confirmModal" class="modal">
+    <div class="modal-content">
+        <p class="modal-close" id="confirmModalClose">×</ph>
+        <h3 id="confirmModalTitle">Confirm</h3>
+        <p id="confirmModalMessage">Are you sure?</p>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:12px;">
+        <button id="confirmProceed">Proceed</button>
+        <button id="confirmCancel">Cancel</button>
+        </div>
+    </div>
+    </div>
+
+    <!-- Pending-state Modal (show when account already pending) -->
+    <div id="pendingModal" class="modal">
+    <div class="modal-content">
+        <p class="modal-close" id="pendingModalClose">×</p>
+        <h3>Request in Review</h3>
+        <p id="pendingModalText">
+        Your request is being reviewed by an administrator. You may cancel the request if you want.
+        </p>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:12px;">
+        <button id="cancelRequestBtn">Cancel Request</button>
+        <button id="pendingCloseBtn">Close</button>
+        </div>
+    </div>
+    </div>
+
+    <!-- Freeze Warning Modal (for disabled tiles) -->
+    <div id="freezeModal" class="modal">
+    <div class="modal-content">
+        <p class="modal-close" id="freezeModalClose">×</p>
+        <h3>Transactions Paused</h3>
+        <p>Your account is currently frozen or a freeze/unfreeze request is being processed. Deposits, Withdrawals, and Transfers are temporarily unavailable.</p>
+        <div style="display:flex;justify-content:center;margin-top:12px;">
+        <button id="freezeModalOk">OK</button>
+        </div>
+    </div>
+    </div>
+
   </div>
 
     <script>
-        function normalizeClientObject(raw) {
-            if (!raw || typeof raw !== 'object') return {};
-            return {
-                user_id: raw.user_id || raw.id || null,
-                full_name: raw.full_name || raw.fullName || raw.name || null,
-                email: raw.email || raw.emailAddress || null,
+        /* ====== Utilities & Normalization ====== */
+        function normalizeClientObject(raw = {}) {
+        if (!raw || typeof raw !== 'object') return {};
+        return {
+            user_id: raw.user_id || raw.id || null,
+            full_name: raw.full_name || raw.fullName || raw.name || null,
+            email: raw.email || raw.emailAddress || null,
 
-                deposit_type_id: raw.deposit_type_id || raw.depositTypeId || raw.depositType || null,
-                deposit_balance: raw.deposit_balance !== undefined ? raw.deposit_balance : (raw.depositBalance !== undefined ? raw.depositBalance : 0),
+            deposit_type_id: raw.deposit_type_id || raw.depositTypeId || raw.depositType || null,
+            deposit_balance: raw.deposit_balance !== undefined ? raw.deposit_balance : (raw.depositBalance !== undefined ? raw.depositBalance : 0),
+            deposit_status: raw.deposit_status || raw.depositStatus || raw.account_status || null,
 
-                savings_type_id: raw.savings_type_id || raw.savingsTypeId || null,
-                savings_balance: raw.savings_balance !== undefined ? raw.savings_balance : (raw.savingsBalance !== undefined ? raw.savingsBalance : 0),
+            savings_type_id: raw.savings_type_id || raw.savingsTypeId || null,
+            savings_balance: raw.savings_balance !== undefined ? raw.savings_balance : (raw.savingsBalance !== undefined ? raw.savingsBalance : 0),
 
-                loan_type_id: raw.loan_type_id || raw.loanTypeId || null,
-                loan_balance: raw.loan_balance !== undefined ? raw.loan_balance : (raw.loanBalance !== undefined ? raw.loanBalance : 0),
+            loan_type_id: raw.loan_type_id || raw.loanTypeId || null,
+            loan_balance: raw.loan_balance !== undefined ? raw.loan_balance : (raw.loanBalance !== undefined ? raw.loanBalance : 0),
 
-                ...raw
-            };
+            ...raw
+        };
         }
 
+        function normalizeStatus(status) {
+        if (status === null || status === undefined) return null;
+        const s = String(status).trim().toLowerCase();
+        if (s === 'open') return 'Open';
+        if (s === 'frozen') return 'Frozen';
+        if (s === 'pending freeze' || s === 'pending_freeze' || s === 'pendingfreeze') return 'Pending Freeze';
+        if (s === 'pending unfreeze' || s === 'pending_unfreeze' || s === 'pendingunfreeze') return 'Pending Unfreeze';
+        return status; // fallback, but prefer normalized values above
+        }
+
+        /* ====== Local state ====== */
         let _rawClient = JSON.parse(localStorage.getItem('clientData')) || {};
         let clientData = normalizeClientObject(_rawClient);
         const clientToken = localStorage.getItem('clientToken') || '';
-        const clientId = clientData?.user_id || null;
 
         function saveClientData(updated) {
-            const normalized = normalizeClientObject(updated);
-            localStorage.setItem('clientData', JSON.stringify(normalized));
-            clientData = normalized;
+        const normalized = normalizeClientObject(updated);
+        localStorage.setItem('clientData', JSON.stringify(normalized));
+        clientData = normalized;
         }
 
+        /* ====== Elements ====== */
         const sidebar = document.getElementById('sidebar');
         const hamburger = document.getElementById('hamburger');
-        const modal = document.getElementById('accountModal');
+
+        const modal = document.getElementById('accountModal'); // existing base modal
         const modalClose = document.getElementById('modalClose');
         const accountMessage = document.getElementById('accountMessage');
         const modalActions = document.getElementById('modalActions');
+
+        const confirmModal = document.getElementById('confirmModal');
+        const confirmModalClose = document.getElementById('confirmModalClose'); // <p class="close-x" id="confirmModalClose">×</p>
+        const confirmTitle = document.getElementById('confirmModalTitle');
+        const confirmMessage = document.getElementById('confirmModalMessage');
+        const confirmProceed = document.getElementById('confirmProceed');
+        const confirmCancel = document.getElementById('confirmCancel');
+
+        const pendingModal = document.getElementById('pendingModal');
+        const pendingModalClose = document.getElementById('pendingModalClose'); // close X
+        const pendingCloseBtn = document.getElementById('pendingCloseBtn');
+        const cancelRequestBtn = document.getElementById('cancelRequestBtn');
+        const pendingModalText = document.getElementById('pendingModalText');
+
+        const freezeModal = document.getElementById('freezeModal');
+        const freezeModalClose = document.getElementById('freezeModalClose'); // close X
+        const freezeModalOk = document.getElementById('freezeModalOk');
 
         const formContainer = document.getElementById('formContainer');
         const subtypeTiles = document.getElementById('subtypeTiles');
@@ -142,272 +214,396 @@
         const transactionContainer = document.getElementById('transactionContainer');
         const depositMessage = document.getElementById('depositMessage');
 
-        modalClose.addEventListener('click', () => modal.classList.remove('active'));
+        /* ====== Modal helpers ====== */
+        function openModal(el) { if (!el) return; el.style.display = 'flex'; }
+        function closeModal(el) { if (!el) return; el.style.display = 'none'; }
+
         function showModal(message, actionsHTML = '') {
-            accountMessage.innerHTML = message;
-            modalActions.innerHTML = actionsHTML;
-            modal.classList.add('active');
+        if (!modal) { alert(message); return; } // fallback
+        accountMessage.innerHTML = message;
+        modalActions.innerHTML = actionsHTML;
+        openModal(modal);
         }
 
+        /* wire modal close X for base modal */
+        modalClose?.addEventListener('click', () => closeModal(modal));
+
+        /* wire small modal closes */
+        confirmModalClose?.addEventListener('click', () => closeModal(confirmModal));
+        confirmCancel?.addEventListener('click', () => closeModal(confirmModal));
+
+        pendingModalClose?.addEventListener('click', () => closeModal(pendingModal));
+        pendingCloseBtn?.addEventListener('click', () => closeModal(pendingModal));
+
+        freezeModalClose?.addEventListener('click', () => closeModal(freezeModal));
+        freezeModalOk?.addEventListener('click', () => closeModal(freezeModal));
+
+        /* ====== Fetch / Update ====== */
         async function fetchClientAccounts() {
-            try {
-                const res = await fetch('/api/client/accounts', {
-                    headers: { 'Authorization': `Bearer ${clientToken}` }
-                });
-                if (!res.ok) throw new Error('Failed to fetch accounts');
-                const accounts = await res.json();
+        try {
+            const res = await fetch('/api/client/accounts', {
+            headers: { 'Authorization': `Bearer ${clientToken}` }
+            });
+            if (!res.ok) throw new Error('Failed to fetch accounts');
+            const accounts = await res.json();
 
-                const depositAcc = accounts.find(acc => acc.type_name === 'Deposit');
-                if (depositAcc) {
-                    clientData.deposit_type_id = depositAcc.type_id;
-                    clientData.deposit_balance = depositAcc.balance;
-                    clientData.deposit_status = depositAcc.account_status;
-                }
-
-                saveClientData(clientData);
-
-                depositBalance.textContent = parseFloat(clientData.deposit_balance).toFixed(2);
-                document.getElementById("depositAccountId").textContent = `Account ID: ${clientData.deposit_type_id}`;
-                depositAccountStatus.textContent = `Status: ${clientData.deposit_status}`;
-
-                updateFreezeButton();
-
-            } catch (err) {
-                console.error('Fetch accounts error:', err);
-                showModal('Could not fetch account info. Please log in again.');
-            }
-        }
-
-        function updateFreezeButton() {
-            const status = clientData.deposit_status || 'Active';
-
-            switch (status) {
-                case 'Active':
-                    freezeBtn.textContent = 'Freeze Account';
-                    freezeBtn.disabled = false;
-                    break;
-
-                case 'Frozen':
-                    freezeBtn.textContent = 'Unfreeze Account';
-                    freezeBtn.disabled = false;
-                    break;
-
-                case 'pending_freeze':
-                case 'Pending Freeze':
-                    freezeBtn.textContent = 'Freeze Pending...';
-                    freezeBtn.disabled = true;
-                    break;
-
-                case 'pending_unfreeze':
-                case 'Pending Unfreeze':
-                    freezeBtn.textContent = 'Unfreeze Pending...';
-                    freezeBtn.disabled = true;
-                    break;
-
-                default:
-                    freezeBtn.textContent = 'Freeze Account';
-                    freezeBtn.disabled = false;
-            }
-
-            depositAccountStatus.textContent = `Status: ${status}`;
-        }
-
-
-        async function updateFreezeStatus() {
-            if (!clientData.deposit_type_id) {
-                return showModal('Account type not found.');
-            }
-
-            const current = clientData.deposit_status;
-            let action;
-
-            // Decide whether to freeze or unfreeze
-            if (current === 'Active') {
-                action = 'freeze';
-            } else if (current === 'Frozen') {
-                action = 'unfreeze';
+            const depositAcc = Array.isArray(accounts) ? accounts.find(acc => acc.type_name === 'Deposit') : null;
+            if (depositAcc) {
+            clientData.deposit_type_id = depositAcc.type_id;
+            clientData.deposit_balance = depositAcc.balance;
+            // Normalize status to canonical form
+            clientData.deposit_status = normalizeStatus(depositAcc.account_status || depositAcc.accountStatus || depositAcc.status);
             } else {
-                return showModal('Account request is already pending.');
+            clientData.deposit_type_id = null;
+            clientData.deposit_balance = 0;
+            clientData.deposit_status = null;
             }
 
-            try {
-                const res = await fetch(`/api/client/account/${clientData.deposit_type_id}/${action}`, {
-                    method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${clientToken}` }
-                });
+            saveClientData(clientData);
 
-                const data = await res.json();
+            depositBalance.textContent = parseFloat(clientData.deposit_balance || 0).toFixed(2);
+            document.getElementById("depositAccountId").textContent = `Account ID: ${clientData.deposit_type_id || '-'}`;
+            depositAccountStatus.textContent = `Status: ${clientData.deposit_status || 'Unknown'}`;
 
-                if (!res.ok) {
-                    return showModal(data.message || 'Unable to update status.');
-                }
-
-                // Update UI with pending status
-                clientData.deposit_status = action === 'freeze'
-                    ? 'Pending Freeze'
-                    : 'Pending Unfreeze';
-
-                saveClientData(clientData);
-                updateFreezeButton();
-
-                showModal(data.message);
-
-            } catch (err) {
-                console.error(err);
-                showModal('Failed to update freeze status.');
-            }
+            updateFreezeButton();
+            updateSubtypeTileLock();
+        } catch (err) {
+            console.error('Fetch accounts error:', err);
+            showModal('Could not fetch account info. Please log in again.');
+        }
         }
 
-        freezeBtn.addEventListener('click', updateFreezeStatus);
+        /* ====== Freeze button logic ====== */
+        function updateFreezeButton() {
+        const status = clientData.deposit_status;
 
-        hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
-        document.getElementById('home').onclick = () => location.href = 'home.html';
-        document.getElementById('historyNav').onclick = () => location.href = 'history.html';
-        document.getElementById('profile').onclick = () => location.href = 'profile.html';
-        document.getElementById('notifications').onclick = () => location.href = 'notifications.html';
-        document.getElementById('logout').onclick = () => {
-            localStorage.removeItem('clientToken');
-            localStorage.removeItem('clientData');
-            location.href = '../index.html';
+        switch (status) {
+            case 'Open':
+            freezeBtn.textContent = 'Freeze Account';
+            freezeBtn.disabled = false;
+            break;
+            case 'Frozen':
+            freezeBtn.textContent = 'Unfreeze Account';
+            freezeBtn.disabled = false;
+            break;
+            case 'Pending Freeze':
+            freezeBtn.textContent = 'Freeze Pending...';
+            freezeBtn.disabled = false; // allow to open pending modal & cancel
+            break;
+            case 'Pending Unfreeze':
+            freezeBtn.textContent = 'Unfreeze Pending...';
+            freezeBtn.disabled = false;
+            break;
+            default:
+            freezeBtn.textContent = 'Freeze Account';
+            freezeBtn.disabled = false;
+        }
+
+        depositAccountStatus.textContent = `Status: ${status || 'Unknown'}`;
+        }
+
+        /* Pending modal content */
+        function openPendingModal() {
+        const s = clientData.deposit_status;
+        const msg = (s === 'Pending Freeze')
+            ? 'Your freeze request is currently pending admin review. You can cancel the request if you want to stop it.'
+            : (s === 'Pending Unfreeze')
+            ? 'Your unfreeze request is currently pending admin review. You can cancel the request if you want to stop it.'
+            : 'Your request is being reviewed.';
+        if (pendingModalText) pendingModalText.textContent = msg;
+        openModal(pendingModal);
+        }
+
+        /* Freeze button click handler (shows confirm or pending modal) */
+        function onFreezeButtonClick() {
+        const status = clientData.deposit_status;
+        if (status === 'Pending Freeze' || status === 'Pending Unfreeze') {
+            openPendingModal();
+            return;
+        }
+
+        const action = (status === 'Frozen') ? 'unfreeze' : 'freeze';
+        const title = (action === 'freeze') ? 'Confirm Freeze' : 'Confirm Unfreeze';
+        const message = (action === 'freeze')
+            ? 'Are you sure you want to request a freeze on this account? Transactions will be paused while admin reviews this request.'
+            : 'Are you sure you want to request an unfreeze of this account?';
+
+        confirmTitle.textContent = title;
+        confirmMessage.textContent = message;
+        openModal(confirmModal);
+
+        // ensure only one handler is attached
+        confirmProceed.onclick = null;
+        confirmProceed.onclick = async () => {
+            closeModal(confirmModal);
+            await performClientFreezeAction(action);
         };
-        document.getElementById('home').style.backgroundColor = 'var(--accent-color)';
-        document.getElementById('home').style.color = '#000';
-
-        async function postTransaction(url, data) {
-            try {
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${clientToken}`
-                    },
-                    body: JSON.stringify(data)
-                });
-                const json = await res.json();
-                if (!res.ok) throw new Error(json.message || 'Error');
-                return json;
-            } catch (err) {
-                showModal(`Transaction failed: ${err.message}`);
-                throw err;
-            }
         }
 
-        // --- Transaction subtypes logic (deposit/withdraw/transfer/history) ---
-        const subtypes = [
-            { id: 'depositTile', type: 'deposit', route: '/api/transactions/deposit' },
-            { id: 'withdrawTile', type: 'withdraw', route: '/api/transactions/withdraw' },
-            { id: 'transferTile', type: 'transfer', route: '/api/transactions/transfer' },
-            { id: 'historyTile', type: 'history' }
-        ];
+        async function performClientFreezeAction(action) {
+        if (!clientData.deposit_type_id) {
+            return showModal('Account type not found.');
+        }
+        try {
+            const res = await fetch(`/api/client/account/${clientData.deposit_type_id}/${action}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${clientToken}` }
+            });
+            // parse safely
+            let data;
+            try { data = await res.json(); } catch (e) { data = {}; }
+            if (!res.ok) {
+            return showModal(data.message || 'Unable to update status.');
+            }
 
-        subtypes.forEach(sub => {
-            const element = document.getElementById(sub.id);
-            if (!element) return;
+            // re-fetch authoritative state
+            await fetchClientAccounts();
+            showModal(data.message || 'Request submitted.');
+        } catch (err) {
+            console.error(err);
+            showModal('Failed to submit request.');
+        }
+        }
 
-            element.onclick = async () => {
-                if (!clientData.deposit_type_id) {
-                    await fetchClientAccounts();
-                    if (!clientData.deposit_type_id) return showModal('Account type not found.');
-                }
+        /* Cancel pending request (calls server cancel endpoint) */
+        async function cancelPendingRequest() {
+        const typeId = clientData.deposit_type_id;
+        if (!typeId) return showModal('Account type not found.');
 
-                const typeId = clientData.deposit_type_id;
+        try {
+            const res = await fetch(`/api/client/account/${typeId}/cancel`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${clientToken}` }
+            });
+            let data;
+            try { data = await res.json(); } catch (_) { data = {}; }
+            if (!res.ok) return showModal(data.message || 'Failed to cancel request.');
 
-                if (sub.type === 'history') {
-                    subtypeTiles.style.display = 'none';
-                    formContainer.style.display = 'none';
-                    transactionContainer.style.display = 'block';
-                    goBackBtn.style.display = 'inline-block';
-                    freezeBtn.style.display = 'none';
-                    depositMessage.textContent = 'Fetching transactions...';
+            await fetchClientAccounts();
+            showModal(data.message || 'Request canceled.');
+            closeModal(pendingModal);
+        } catch (err) {
+            console.error(err);
+            showModal('Failed to cancel request.');
+        }
+        }
 
-                    try {
-                        const res = await fetch(`/api/transactions/history/account/Deposit`, {
-                            headers: { 'Authorization': `Bearer ${clientToken}` }
-                        });
-                        const data = await res.json();
-                        depositMessage.textContent = `Fetched ${data.length} transactions.`;
+        /* attach freeze button event */
+        freezeBtn?.addEventListener('click', onFreezeButtonClick);
 
-                        const tbody = document.querySelector("#depositTransactionTable tbody");
-                        tbody.innerHTML = "";
-                        data.forEach(tx => {
-                            const tr = document.createElement("tr");
-                            tr.innerHTML = `
-                                <td>${new Date(tx.transaction_date).toLocaleString()}</td>
-                                <td>${tx.transaction_type}</td>
-                                <td>₱${parseFloat(tx.amount).toFixed(2)}</td>
-                                <td>${tx.description || '-'}</td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-                    } catch (err) {
-                        depositMessage.textContent = 'Failed to fetch transactions';
-                        depositMessage.classList.add('error');
-                    }
-
-                } else {
-                    let formHtml = `<form id="${sub.type}Form"><h2>${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} Money</h2>`;
-                    if (sub.type === 'transfer') formHtml += `<input type="number" placeholder="Recipient Account ID" required>`;
-                    formHtml += `<input type="number" placeholder="Amount" required>`;
-                    formHtml += `<button type="submit">${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)}</button></form>`;
-
-                    formContainer.innerHTML = formHtml;
-                    formContainer.style.display = 'block';
-                    subtypeTiles.style.display = 'none';
-                    transactionContainer.style.display = 'none';
-                    freezeBtn.style.display = 'none';
-                    goBackBtn.style.display = 'inline-block';
-
-                    const formEl = document.getElementById(`${sub.type}Form`);
-                    formEl.onsubmit = async e => {
-                        e.preventDefault();
-
-                        let amount, toTypeId;
-                        if (sub.type === 'transfer') {
-                            toTypeId = parseInt(e.target[0].value);
-                            amount = parseFloat(e.target[1].value);
-                        } else {
-                            amount = parseFloat(e.target[0].value);
-                        }
-
-                        if (isNaN(amount) || amount <= 0) return showModal('Enter a valid amount.');
-
-                        const payload = sub.type === 'transfer'
-                            ? { fromTypeId: typeId, toTypeId, amount }
-                            : { typeId, amount };
-
-                        const result = await postTransaction(sub.route, payload);
-
-                        if (result.newBalance !== undefined && result.newBalance !== null) {
-                            clientData.deposit_balance = parseFloat(result.newBalance);
-                        } else {
-                            clientData.deposit_balance = sub.type === 'deposit'
-                                ? (clientData.deposit_balance || 0) + amount
-                                : (clientData.deposit_balance || 0) - amount;
-                        }
-
-                        depositBalance.textContent = parseFloat(clientData.deposit_balance).toFixed(2);
-                        saveClientData(clientData);
-                        await fetchClientAccounts();
-
-                        if (sub.type === 'transfer') {
-                            showModal(`Transfer of ₱${amount.toFixed(2)} successful.<br>Sent to Account ID: ${payload.toTypeId}.`);
-                        } else {
-                            showModal(`${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} of ₱${amount.toFixed(2)} successful.`);
-                        }
-                    };
-                }
-            };
+        /* pending modal cancel button (the button inside the pending modal) */
+        cancelRequestBtn?.addEventListener('click', () => {
+        if (!confirm('Cancel the pending request? This will revert to the previous account state.')) return;
+        cancelPendingRequest();
         });
 
-        goBackBtn.onclick = () => {
-            formContainer.innerHTML = '';
-            formContainer.style.display = 'none';
-            transactionContainer.style.display = 'none';
-            freezeBtn.style.display = 'inline-block';
-            subtypeTiles.style.display = 'flex';
-            goBackBtn.style.display = 'none';
+        /* ====== Tile locking & click handling ====== */
+        function updateSubtypeTileLock() {
+        const status = clientData.deposit_status;
+        const locked = (status === 'Frozen' || status === 'Pending Freeze' || status === 'Pending Unfreeze');
+
+        const tiles = document.querySelectorAll('.subtype-tile');
+        tiles.forEach(tile => {
+            const type = tile.dataset.type;
+            // always allow history
+            if (type === 'history') {
+            tile.classList.remove('disabled');
+            tile.style.opacity = '1';
+            tile.dataset.locked = 'false';
+            return;
+            }
+
+            if (locked) {
+            tile.classList.add('disabled');
+            tile.style.opacity = '0.5';
+            // mark locked, keep pointer events so we can show modal
+            tile.dataset.locked = 'true';
+            } else {
+            tile.classList.remove('disabled');
+            tile.style.opacity = '1';
+            tile.dataset.locked = 'false';
+            }
+        });
+        }
+
+        function setupSubtypeTileHandlers() {
+        const mapping = {
+            depositTile: { type: 'deposit', route: '/api/transactions/deposit' },
+            withdrawTile: { type: 'withdraw', route: '/api/transactions/withdraw' },
+            transferTile: { type: 'transfer', route: '/api/transactions/transfer' },
+            historyTile: { type: 'history' }
         };
 
+        Object.keys(mapping).forEach(tileId => {
+            const element = document.getElementById(tileId);
+            if (!element) return;
+
+            // ensure element is flagged unlocked by default
+            if (element.dataset.locked === undefined) element.dataset.locked = 'false';
+
+            element.addEventListener('click', async (e) => {
+            // if locked, show freeze-warning modal
+            if (element.dataset.locked === 'true') {
+                openModal(freezeModal);
+                return;
+            }
+
+            const sub = mapping[tileId];
+            if (sub.type === 'history') {
+                subtypeTiles.style.display = 'none';
+                formContainer.style.display = 'none';
+                transactionContainer.style.display = 'block';
+                goBackBtn.style.display = 'inline-block';
+                freezeBtn.style.display = 'none';
+                depositMessage.textContent = 'Fetching transactions...';
+
+                try {
+                const res = await fetch(`/api/transactions/history/account/Deposit`, {
+                    headers: { 'Authorization': `Bearer ${clientToken}` }
+                });
+                const data = await res.json();
+                depositMessage.textContent = `Fetched ${data.length} transactions.`;
+                const tbody = document.querySelector("#depositTransactionTable tbody");
+                tbody.innerHTML = "";
+                data.forEach(tx => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                    <td>${new Date(tx.transaction_date).toLocaleString()}</td>
+                    <td>${tx.transaction_type}</td>
+                    <td>₱${parseFloat(tx.amount).toFixed(2)}</td>
+                    <td>${tx.description || '-'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                } catch (err) {
+                depositMessage.textContent = 'Failed to fetch transactions';
+                depositMessage.classList.add('error');
+                }
+                return;
+            }
+
+            // For deposit/withdraw/transfer: show form
+            let formHtml = `<form id="${sub.type}Form"><h2>${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} Money</h2>`;
+            if (sub.type === 'transfer') formHtml += `<input type="number" placeholder="Recipient Account ID" required>`;
+            formHtml += `<input type="number" placeholder="Amount" required>`;
+            formHtml += `<button type="submit">${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)}</button></form>`;
+
+            formContainer.innerHTML = formHtml;
+            formContainer.style.display = 'block';
+            subtypeTiles.style.display = 'none';
+            transactionContainer.style.display = 'none';
+            freezeBtn.style.display = 'none';
+            goBackBtn.style.display = 'inline-block';
+
+            const formEl = document.getElementById(`${sub.type}Form`);
+            formEl.onsubmit = async e => {
+                e.preventDefault();
+                const typeId = clientData.deposit_type_id;
+                let amount, toTypeId;
+                if (sub.type === 'transfer') {
+                toTypeId = parseInt(e.target[0].value);
+                amount = parseFloat(e.target[1].value);
+                } else {
+                amount = parseFloat(e.target[0].value);
+                }
+                if (isNaN(amount) || amount <= 0) return showModal('Enter a valid amount.');
+
+                const payload = sub.type === 'transfer' ? { fromTypeId: typeId, toTypeId, amount } : { typeId, amount };
+
+                try {
+                const result = await postTransaction(sub.route, payload);
+                if (result.newBalance !== undefined && result.newBalance !== null) {
+                    clientData.deposit_balance = parseFloat(result.newBalance);
+                } else {
+                    clientData.deposit_balance = sub.type === 'deposit'
+                    ? (clientData.deposit_balance || 0) + amount
+                    : (clientData.deposit_balance || 0) - amount;
+                }
+                depositBalance.textContent = parseFloat(clientData.deposit_balance).toFixed(2);
+                saveClientData(clientData);
+                await fetchClientAccounts();
+
+                if (sub.type === 'transfer') {
+                    showModal(`Transfer of ₱${amount.toFixed(2)} successful.<br>Sent to Account ID: ${payload.toTypeId}.`);
+                } else {
+                    showModal(`${sub.type.charAt(0).toUpperCase() + sub.type.slice(1)} of ₱${amount.toFixed(2)} successful.`);
+                }
+                } catch (err) {
+                console.error(err);
+                showModal('Transaction failed.');
+                }
+            };
+            });
+        });
+        }
+
+        /* ====== Transaction helper ====== */
+        async function postTransaction(url, data) {
+        try {
+            const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${clientToken}`
+            },
+            body: JSON.stringify(data)
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Error');
+            return json;
+        } catch (err) {
+            showModal(`Transaction failed: ${err.message}`);
+            throw err;
+        }
+        }
+
+        /* ====== Navigation / Sidebar highlight ====== */
+        document.getElementById('home')?.addEventListener('click', () => location.href = 'home.html');
+        document.getElementById('historyNav')?.addEventListener('click', () => location.href = 'history.html');
+        document.getElementById('profile')?.addEventListener('click', () => location.href = 'profile.html');
+        document.getElementById('notifications')?.addEventListener('click', () => location.href = 'notifications.html');
+        document.getElementById('logout')?.addEventListener('click', () => {
+        localStorage.removeItem('clientToken');
+        localStorage.removeItem('clientData');
+        location.href = '../index.html';
+        });
+
+        function highlightCurrentPage() {
+        const path = window.location.pathname;
+        // simple mapping of filename -> element ID
+        const map = {
+            'home.html': 'home',
+            'deposit.html': 'home', // if deposit is under home, adjust if needed
+            'history.html': 'historyNav',
+            'profile.html': 'profile',
+            'notifications.html': 'notifications'
+        };
+        const file = path.split('/').pop();
+        const idToActivate = map[file];
+        document.querySelectorAll('.sidebar ul li, .sidebar a').forEach(el => el.classList && el.classList.remove('active-page'));
+        if (idToActivate) {
+            const el = document.getElementById(idToActivate);
+            if (el) {
+            el.style.backgroundColor = 'var(--accent-color)';
+            el.style.color = '#000';
+            el.classList.add('active-page');
+            }
+        }
+        }
+        highlightCurrentPage();
+
+        /* ====== Back button handler ====== */
+        goBackBtn.onclick = () => {
+        formContainer.innerHTML = '';
+        formContainer.style.display = 'none';
+        transactionContainer.style.display = 'none';
+        freezeBtn.style.display = 'inline-block';
+        subtypeTiles.style.display = 'flex';
+        goBackBtn.style.display = 'none';
+        };
+
+        /* ====== Init ====== */
+        setupSubtypeTileHandlers();
         fetchClientAccounts();
     </script>
 </body>

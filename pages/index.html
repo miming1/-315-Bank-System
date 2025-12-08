@@ -220,12 +220,27 @@
         });
 
         const data = await res.json();
+
         if (res.ok) {
+          // 🔥 If deletion was cancelled, show the message on screen
+          if (data.deletionCancelled && data.deletionMessage) {
+            msg.textContent = data.deletionMessage;   // Display it in your existing message box
+            msg.classList.remove("error");
+            
+            // Optional: give user 2 seconds to read it
+            setTimeout(() => {
+              window.location.href = "/client/home.html";
+            }, 2000);
+            return; // ⛔ Stop here so it doesn’t overwrite with "Login successful"
+          }
+
+          // Normal login
           msg.textContent = "Login successful! Redirecting...";
           localStorage.setItem("clientToken", data.token);
           setTimeout(() => {
-            window.location.href = "/client/home.html"; // redirect to client home
+            window.location.href = "/client/home.html";
           }, 1000);
+
         } else {
           msg.classList.add("error");
           msg.textContent = data.message || "Invalid credentials.";
@@ -235,6 +250,7 @@
         msg.textContent = "Server error.";
       }
     });
+
 
     // ==== CLIENT SIGNUP ====
     clientSignupForm.addEventListener("submit", async (e) => {

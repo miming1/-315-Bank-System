@@ -135,127 +135,138 @@ router.get("/client/:user_id/accounts", verifyAdminToken, async (req, res) => {
 // HARD FREEZE ACCOUNT
 // ========================
 router.post("/freeze-account/:type_id", verifyAdminToken, async (req, res) => {
-  try {
-    const typeId = req.params.type_id;
+    try {
+        const typeId = req.params.type_id;
 
-    // Fetch account
-    const [rows] = await db.query(
-      "SELECT type_id, account_status, user_id FROM account_type WHERE type_id = ?",
-      [typeId]
-    );
-    if (!rows.length) return res.status(404).json({ message: "Account not found." });
+        const [rows] = await db.query(
+            "SELECT type_id, account_status, user_id FROM account_type WHERE type_id = ?",
+            [typeId]
+        );
 
-    const account = rows[0];
+        if (!rows.length)
+            return res.status(404).json({ message: "Account not found." });
 
-    // Check if already frozen
-    if (account.account_status === "Frozen") {
-      return res.status(400).json({ message: "Account is already frozen." });
+        const account = rows[0];
+
+        // Must match ENUM
+        if (account.account_status !== "Pending Freeze")
+            return res.status(400).json({ message: "No pending freeze request." });
+
+        // Approve freeze
+        await db.query(
+            "UPDATE account_type SET account_status = 'Frozen' WHERE type_id = ?",
+            [typeId]
+        );
+
+        await db.query(
+            "INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)",
+            [
+                account.user_id,
+                "ACCOUNT_FROZEN",
+                `Your account (${typeId}) has been frozen by admin.`
+            ]
+        );
+
+        res.json({ message: "Account hard frozen successfully." });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error." });
     }
-
-    // Update account status
-    await db.query(
-      "UPDATE account_type SET account_status = 'Frozen' WHERE type_id = ?",
-      [typeId]
-    );
-
-    // Insert notification
-    await db.query(
-      "INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)",
-      [account.user_id, "ACCOUNT_FROZEN", `Your account (${typeId}) has been frozen by admin.`]
-    );
-
-    // Log admin action
-    await db.query(
-      "INSERT INTO admin_actions (user_id, target_id, target_table, action_type, remarks) VALUES (?, ?, 'account_type', 'Update', ?)",
-      [req.adminId, typeId, "Account hard frozen by admin"]
-    );
-
-    res.json({ message: "Account hard frozen successfully." });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error." });
-  }
 });
 
 // ========================
 // HARD UNFREEZE ACCOUNT
 // ========================
 router.post("/unfreeze-account/:type_id", verifyAdminToken, async (req, res) => {
-  try {
-    const typeId = req.params.type_id;
+    try {
+        const typeId = req.params.type_id;
 
-    // Fetch account
-    const [rows] = await db.query(
-      "SELECT type_id, account_status, user_id FROM account_type WHERE type_id = ?",
-      [typeId]
-    );
-    if (!rows.length) return res.status(404).json({ message: "Account not found." });
+        const [rows] = await db.query(
+            "SELECT type_id, account_status, user_id FROM account_type WHERE type_id = ?",
+            [typeId]
+        );
 
-    const account = rows[0];
+        if (!rows.length)
+            return res.status(404).json({ message: "Account not found." });
 
-    // Check if already open
-    if (account.account_status === "Open") {
-      return res.status(400).json({ message: "Account is already open." });
+        const account = rows[0];
+
+        if (account.account_status !== "Pending Unfreeze")
+            return res.status(400).json({ message: "No pending unfreeze request." });
+
+        // Approve unfreeze
+        await db.query(
+            "UPDATE account_type SET account_status = 'Open' WHERE type_id = ?",
+            [typeId]
+        );
+
+        await db.query(
+            "INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)",
+            [
+                account.user_id,
+                "ACCOUNT_UNFROZEN",
+                `Your account (${typeId}) has been unfrozen by admin.`
+            ]
+        );
+
+        res.json({ message: "Account unfrozen successfully." });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error." });
     }
-
-    // Update account status
-    await db.query(
-      "UPDATE account_type SET account_status = 'Open' WHERE type_id = ?",
-      [typeId]
-    );
-
-    // Insert notification
-    await db.query(
-      "INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)",
-      [account.user_id, "ACCOUNT_UNFROZEN", `Your account (${typeId}) has been unfrozen by admin.`]
-    );
-
-    // Log admin action
-    await db.query(
-      "INSERT INTO admin_actions (user_id, target_id, target_table, action_type, remarks) VALUES (?, ?, 'account_type', 'Update', ?)",
-      [req.adminId, typeId, "Account unfrozen by admin"]
-    );
-
-    res.json({ message: "Account unfrozen successfully." });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error." });
-  }
 });
 
-// ========================
-// 4️⃣ HARD DELETE USER
-// ========================
+// ================================
+// 4️⃣ ADMIN CONFIRMS USER DELETION (Sets 30-day final_deletion_at)
+// ================================
 router.delete("/delete-user/:user_id", verifyAdminToken, async (req, res) => {
   try {
     const userId = req.params.user_id;
 
-    // Check user exists and has requested deletion
+    // 1. Check user exists
     const [rows] = await db.query(
-      "SELECT user_id, role, status FROM users WHERE user_id = ?",
+      "SELECT * FROM users WHERE user_id = ?",
       [userId]
     );
 
-    if (!rows.length) return res.status(404).json({ message: "User not found." });
-    if (rows[0].role !== "client")
-      return res.status(403).json({ message: "Only clients can be deleted." });
+    if (!rows.length)
+      return res.status(404).json({ message: "User not found." });
 
-    if (rows[0].status !== "pending_deletion")
+    const user = rows[0];
+
+    // Only clients can be deleted
+    if (user.role !== "client")
+      return res.status(403).json({ message: "Only client accounts can be deleted." });
+
+    // User must have requested deletion
+    if (user.status !== "pending_deletion")
       return res.status(400).json({ message: "User has not requested deletion." });
 
-    // Hard delete user
-    await db.query("DELETE FROM users WHERE user_id = ?", [userId]);
-
-    // Log admin action
+    // 2. Admin marks deletion as approved
     await db.query(
-      "INSERT INTO admin_actions (user_id, target_id, target_table, action_type, remarks) VALUES (?, ?, 'users', 'Delete', 'User hard deleted by admin')",
+      `UPDATE users
+       SET status = 'on_deletion',
+           final_deletion_at = NOW() + INTERVAL 30 DAY
+       WHERE user_id = ?`,
+      [userId]
+    );
+
+    // 3. Log admin action
+    await db.query(
+      `INSERT INTO admin_actions 
+       (user_id, target_id, target_table, action_type, remarks) 
+       VALUES (?, ?, 'users', 'Delete', 'Admin approved user deletion; countdown started')`,
       [req.adminId, userId]
     );
 
-    res.json({ message: "User and all related accounts/transactions deleted successfully." });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error." });
+    res.json({
+      message:
+        "User marked for deletion. Their account will be permanently deleted and archived after 30 days unless they log in to cancel.",
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Server error." });
   }
 });
 

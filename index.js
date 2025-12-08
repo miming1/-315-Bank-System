@@ -6,6 +6,7 @@ import transactionRoute from "./routes/transactionRoute.js";
 import adminRoute from "./routes/adminRoute.js";
 import clientRoute from "./routes/clientRoute.js";
 import "./config/db.js";
+import "./cron/deleteCleanup.mjs";
 
 dotenv.config();
 const app = express();

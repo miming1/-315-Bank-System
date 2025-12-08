@@ -141,6 +141,11 @@
         const data = await res.json();
         if (!res.ok) return showError(data.message || "Failed to load profile.");
 
+        // 🚨 If user is approved for deletion (admin set on_deletion), force logout + redirect
+        if (data.status === 'on_deletion') {
+            return redirectToLogin("Your account is currently scheduled for deletion. Please log in again later or contact support.");
+        }
+
         // Populate profile fields
         viewName.textContent = data.full_name;
         viewEmail.textContent = data.email;
@@ -253,11 +258,44 @@
 
     deleteBtn.addEventListener('click', async () => {
       if (deleteStatus !== 'none') {
-        showModal(
-          deleteStatus === 'pending'
-            ? "Your deletion request is already pending admin approval."
-            : "Your account is approved for deletion. Please withdraw remaining balances."
-        );
+        if (deleteStatus === 'pending') {
+          // User already requested deletion → allow CANCEL REQUEST
+          showModal(
+            "Your account deletion request is currently pending admin approval.<br><br>Do you want to cancel your deletion request?",
+            `<button id='cancelRequestBtn'>Cancel Request</button>
+            <button id='closeModalBtn'>Close</button>`
+          );
+
+          document.getElementById("cancelRequestBtn").onclick = async () => {
+            try {
+              const res = await fetch("/api/client/delete-request/cancel", {
+                method: "PUT",
+                headers: { "Authorization": `Bearer ${clientToken}` }
+              });
+
+              const data = await res.json();
+              if (res.ok) {
+                saveDeleteStatus("none"); // return UI to normal state
+                showModal("Your deletion request has been cancelled.");
+              } else {
+                showModal(data.message || "Failed to cancel the deletion request.");
+              }
+
+            } catch (err) {
+              console.error(err);
+              showModal("Server error while canceling deletion request.");
+            }
+          };
+
+          document.getElementById("closeModalBtn").onclick = () => modal.classList.remove("active");
+
+        } else {
+          // Approved deletion → no cancel allowed
+          showModal(
+            "Your account is already approved for deletion.<br>Please withdraw all balances, then wait for admin processing."
+          );
+        }
+
         return;
       }
 
@@ -310,7 +348,7 @@
     async function checkUnreadNotifications() {
       try {
         const res = await fetch("/api/client/notifications/unread", {
-          headers: { "Authorization": `Bearer " + clientToken` }
+          headers: { "Authorization": `Bearer ${clientToken}` }
         });
         const data = await res.json();
         const notifDot = document.getElementById("notifDot");

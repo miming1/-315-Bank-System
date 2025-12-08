@@ -7,8 +7,9 @@ CREATE TABLE users (
     full_name VARCHAR(100) NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    status ENUM('Active','Inactive','pending_deletion') DEFAULT 'Active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    status ENUM('Active','Inactive','pending_deletion','on_deletion') DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    final_deletion_at TIMESTAMP NULL
 );
 
 CREATE UNIQUE INDEX idx_users_email ON users(email);
@@ -108,3 +109,59 @@ CREATE TABLE admin_actions (
 CREATE INDEX idx_admin_actions_user ON admin_actions(user_id);
 CREATE INDEX idx_admin_actions_target ON admin_actions(target_table, target_id);
 CREATE INDEX idx_admin_actions_date ON admin_actions(action_date);
+
+
+CREATE TABLE archived_users (
+    archived_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT,
+    role ENUM('admin','client'),
+    full_name VARCHAR(100),
+    email VARCHAR(150),
+    password VARCHAR(255),
+    status ENUM('Active','Inactive','pending_deletion'),
+    created_at TIMESTAMP,
+    
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    restore_until TIMESTAMP
+);
+
+CREATE TABLE archived_account_type (
+    archived_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    type_id BIGINT,
+    user_id BIGINT,
+    account_number VARCHAR(30),
+    type_name VARCHAR(100),
+    description TEXT,
+    balance DECIMAL(12,2),
+    interest_earned DECIMAL(13,2),
+    account_status ENUM('Open','Frozen','Pending Freeze','Pending Unfreeze'),
+    created_at TIMESTAMP,
+    last_interest_date DATE,
+
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    restore_until TIMESTAMP
+);
+
+CREATE TABLE archived_account_subtype (
+    archived_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    subtype_id BIGINT,
+    type_id BIGINT,
+    subtype_name VARCHAR(100),
+    description TEXT,
+
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    restore_until TIMESTAMP
+);
+
+CREATE TABLE archived_transactions (
+    archived_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    transaction_id BIGINT,
+    type_id BIGINT,
+    transaction_type ENUM('Deposit','Withdraw','Transfer','Loan Payment'),
+    amount DECIMAL(12,2),
+    transaction_date TIMESTAMP,
+    status ENUM('Pending','Completed','Failed'),
+    description TEXT,
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    restore_until TIMESTAMP NULL
+);

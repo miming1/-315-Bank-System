@@ -252,7 +252,7 @@ tr:hover { background-color: #f1f1f1; cursor: pointer; }
         for (const client of data.clients) {
           // Check if any account is pending freeze/unfreeze
           const pendingAccount = client.accounts?.some(a =>
-            a.account_status === 'pending_freeze' || a.account_status === 'pending_unfreeze'
+            a.account_status === 'Pending Freeze' || a.account_status === 'Pending Unfreeze'
           );
 
           if (pendingAccount || client.status === 'pending_deletion') hasRequests = true;
@@ -299,7 +299,6 @@ tr:hover { background-color: #f1f1f1; cursor: pointer; }
         userInfo.innerHTML = `
           <p>ID: ${data.user.user_id}</p>
           <p>Email: ${data.user.email}</p>
-          <p>Status: ${data.user.status}</p>
           <p>Created At: ${new Date(data.user.created_at).toLocaleString()}</p>
         `;
 
@@ -309,10 +308,10 @@ tr:hover { background-color: #f1f1f1; cursor: pointer; }
           let notice = '';
           let buttonHTML = '';
 
-          if (account.account_status === 'pending_freeze') {
+          if (account.account_status === 'Pending Freeze') {
             notice = 'User requested freeze';
             buttonHTML = `<button class="freeze-btn" onclick="freezeAccount(${account.type_id}, this)">Freeze</button>`;
-          } else if (account.account_status === 'pending_unfreeze') {
+          } else if (account.account_status === 'Pending Unfreeze') {
             notice = 'User requested unfreeze';
             buttonHTML = `<button class="unfreeze-btn" onclick="unfreezeAccount(${account.type_id}, this)">Unfreeze</button>`;
           }
