@@ -32,6 +32,8 @@ const authenticateClient = (req, res, next) => {
 // 1️⃣ SIGNUP 
 // ========================
 router.post('/signup', async (req, res) => {
+
+
     const { full_name, email, password } = req.body;
 
     if (!full_name || !email || !password) {
@@ -56,7 +58,7 @@ router.post('/signup', async (req, res) => {
         const accountsToCreate = [
             { type_name: 'Deposit', description: 'Deposit account', balance: 0.00, status: 'Open' },
             { type_name: 'Savings', description: 'Savings account', balance: 0.00, status: 'Open' },
-            { type_name: 'Loan', description: 'Loan account', balance: 0.00, status: 'Closed' }
+            { type_name: 'Loan', description: 'Loan account', balance: 0.00, status: 'Frozen' } // LOAN LOCKED
         ];
 
         let createdAccounts = {};
@@ -84,6 +86,9 @@ router.post('/signup', async (req, res) => {
             }
             if (acc.type_name === "Savings") {
                 subtypes = ["Savings", "Withdraw", "Transfer", "Savings Summary", "Transaction History"];
+            }
+            if (acc.type_name === "Loan") {
+                subtypes = ["Tier 1", "Tier 2", "Tier 3", "Transaction History"];
             }
 
             for (const st of subtypes) {
@@ -516,34 +521,45 @@ router.get("/notifications/unread", authenticateClient, async (req, res) => {
 });
 
 
-router.get("/me", authenticateClient, async (req, res) => {
+export default router;
+
+// ========================
+// CLIENT: CREATE LOAN REQUEST (persists to loan_requests table)
+// ========================
+router.post("/loan-requests", authenticateClient, async (req, res) => {
   try {
     const userId = req.clientId;
+    const { amount, tier, notes } = req.body;
 
-    const [[user]] = await db.query(
-      `SELECT full_name FROM users WHERE user_id = ?`,
-      [userId]
+    if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "Invalid amount." });
+
+    const [result] = await db.query(
+      `INSERT INTO loan_requests (user_id, money_requested, tier, notes, status, created_at)
+       VALUES (?, ?, ?, ?, 'pending', NOW())`,
+      [userId, amount, tier || null, notes || null]
     );
 
-    const [[loan]] = await db.query(
-      `SELECT account_status
-       FROM account_type
-       WHERE user_id = ? AND type_name = 'Loan'`,
-      [userId]
-    );
-
-    res.json({
-      full_name: user.full_name,
-      loan_status: loan?.account_status === "Open" ? "open" : "locked"
-    });
-
+    res.status(201).json({ message: 'Loan request submitted.', requestId: result.insertId });
   } catch (err) {
-    console.error("ME ROUTE ERROR:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error('Create loan request error:', err);
+    res.status(500).json({ message: 'Server error.' });
   }
 });
 
-
-
-
-export default router;
+// ========================
+// CLIENT: GET OWN LOAN REQUESTS
+// ========================
+router.get('/loan-requests', authenticateClient, async (req, res) => {
+  try {
+    const userId = req.clientId;
+    const [rows] = await db.query(
+      `SELECT id, user_id, money_requested, tier, notes, status, created_at, actioned_by, actioned_at
+       FROM loan_requests WHERE user_id = ? ORDER BY created_at DESC`,
+      [userId]
+    );
+    res.json({ requests: rows });
+  } catch (err) {
+    console.error('Fetch client loan requests error:', err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});

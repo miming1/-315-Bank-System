@@ -165,3 +165,18 @@ CREATE TABLE archived_transactions (
     deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     restore_until TIMESTAMP NULL
 );
+
+CREATE TABLE IF NOT EXISTS loan_requests (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  money_requested DECIMAL(15,2) NOT NULL,
+  tier VARCHAR(50),
+  notes TEXT,
+  status VARCHAR(20) DEFAULT 'pending',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  actioned_by BIGINT NULL,
+  actioned_at DATETIME NULL,
+  INDEX idx_status (status),
+  INDEX idx_user (user_id),
+  CONSTRAINT fk_lr_user FOREIGN KEY (user_id) REFERENCES users(user_id)
+);

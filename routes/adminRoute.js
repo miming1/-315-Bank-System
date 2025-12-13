@@ -271,3 +271,103 @@ router.delete("/delete-user/:user_id", verifyAdminToken, async (req, res) => {
 });
 
 export default router;
+
+// ================================
+// ADMIN: Loan Requests (List / Approve / Deny)
+// ================================
+router.get("/loan-requests", verifyAdminToken, async (req, res) => {
+  try {
+    const statusQuery = (req.query && req.query.status) ? String(req.query.status).toLowerCase() : 'pending';
+    let sql = `SELECT lr.id AS id, lr.user_id, lr.money_requested, lr.tier, lr.notes, lr.status, lr.created_at, lr.actioned_by, lr.actioned_at,
+                      u.full_name, u.email
+               FROM loan_requests lr
+               JOIN users u ON lr.user_id = u.user_id`;
+    const params = [];
+    if (statusQuery !== 'all') {
+      sql += ` WHERE LOWER(lr.status) = ?`;
+      params.push(statusQuery);
+    }
+    sql += ` ORDER BY lr.created_at DESC`;
+
+    const [rows] = await db.query(sql, params);
+    res.json({ requests: rows });
+  } catch (err) {
+    console.error('Error fetching loan requests:', err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+router.post("/loan-requests/:id/approve", verifyAdminToken, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+
+    const [rows] = await db.query("SELECT * FROM loan_requests WHERE id = ?", [requestId]);
+    if (!rows || rows.length === 0) return res.status(404).json({ message: 'Loan request not found.' });
+
+    const reqRow = rows[0];
+    const currentStatus = (reqRow.status || '').toLowerCase();
+    if (currentStatus !== 'pending') {
+      console.warn(`Loan request ${requestId} has status '${reqRow.status}' — cannot approve.`);
+      return res.status(400).json({ message: `Loan request is not pending (current: ${reqRow.status}).` });
+    }
+
+    // Mark request approved
+    await db.query("UPDATE loan_requests SET status = 'approved', actioned_by = ?, actioned_at = NOW() WHERE id = ?", [req.adminId, requestId]);
+
+    // Credit loan account balance if loan account exists (non-fatal)
+    try {
+      const [acctRows] = await db.query("SELECT type_id FROM account_type WHERE user_id = ? AND type_name = 'Loan' LIMIT 1", [reqRow.user_id]);
+      if (acctRows && acctRows.length > 0) {
+        const typeId = acctRows[0].type_id;
+        await db.query("UPDATE account_type SET balance = balance + ? WHERE type_id = ?", [reqRow.money_requested, typeId]);
+
+        // insert transaction record for disbursement
+        await db.query(
+          `INSERT INTO transactions (type_id, transaction_type, amount, description, transaction_date, status)
+           VALUES (?, 'Loan', ?, ?, NOW(), 'Completed')`,
+          [typeId, reqRow.money_requested, `Loan approved (request ${requestId})`]
+        );
+      }
+    } catch (innerErr) {
+      console.error('Non-fatal disbursement error:', innerErr.stack || innerErr);
+      // continue — the request is still marked approved
+    }
+
+    // notify user (non-fatal)
+    try {
+      await db.query("INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)", [reqRow.user_id, 'LOAN_APPROVED', `Your loan request (id: ${requestId}) has been approved.`]);
+    } catch (notifyErr) {
+      console.error('Non-fatal notification error:', notifyErr.stack || notifyErr);
+    }
+
+    res.json({ message: 'Loan request approved.' });
+  } catch (err) {
+    console.error('Error approving loan request:', err.stack || err);
+    res.status(500).json({ message: 'Server error.', error: err.message });
+  }
+});
+
+router.post("/loan-requests/:id/deny", verifyAdminToken, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+
+    const [rows] = await db.query("SELECT * FROM loan_requests WHERE id = ?", [requestId]);
+    if (!rows || rows.length === 0) return res.status(404).json({ message: 'Loan request not found.' });
+
+    const reqRow = rows[0];
+    if (reqRow.status !== 'pending') return res.status(400).json({ message: 'Loan request is not pending.' });
+
+    await db.query("UPDATE loan_requests SET status = 'denied', actioned_by = ?, actioned_at = NOW() WHERE id = ?", [req.adminId, requestId]);
+
+    // notify user (non-fatal)
+    try {
+      await db.query("INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)", [reqRow.user_id, 'LOAN_DENIED', `Your loan request (id: ${requestId}) has been denied.`]);
+    } catch (notifyErr) {
+      console.error('Non-fatal notification error (deny):', notifyErr.stack || notifyErr);
+    }
+    res.json({ message: 'Loan request denied.' });
+  } catch (err) {
+    console.error('Error denying loan request:', err.stack || err);
+    res.status(500).json({ message: 'Server error.', error: err.message });
+  }
+});

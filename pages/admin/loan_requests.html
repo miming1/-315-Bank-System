@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin - Loan Requests</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar" id="sidebar">
+    <div class="header">
+      <h2>BankSys</h2>
+      <i class="hamburger" id="hamburger">☰</i>
+    </div>
+    <ul>
+      <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
+      <li id="accounts"><i>👤</i> <span>Client Accounts</span></li>
+      <li id="loanRequests"><i>💸</i> <span>Loan Requests</span><span class="red-dot" id="loanRequestsDot" style="display:none"></span></li>
+      <li id="transactions"><i>📜</i> <span>Transactions</span></li>
+      <li id="logout"><i>🚪</i> <span>Logout</span></li>
+    </ul>
+  </div>
+
+  <div class="main-content">
+    <h1>Pending Loan Requests</h1>
+    <div id="message" class="message"></div>
+
+    <table id="requestsTable">
+      <thead>
+        <tr>
+          <th>Request ID</th>
+          <th>User</th>
+          <th>Amount</th>
+          <th>Tier</th>
+          <th>Date</th>
+          <th>Notes</th>
+          <th style="width:200px">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="requestsBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const adminToken = localStorage.getItem('adminToken');
+    const messageDiv = document.getElementById('message');
+    const requestsBody = document.getElementById('requestsBody');
+
+    document.getElementById('dashboard').addEventListener('click', () => window.location.href = 'dashboard.html');
+    document.getElementById('accounts').addEventListener('click', () => window.location.href = 'accounts.html');
+    document.getElementById('loanRequests').addEventListener('click', () => window.location.href = 'loan_requests.html');
+    document.getElementById('transactions').addEventListener('click', () => window.location.href = 'transactions.html');
+    document.getElementById('logout').addEventListener('click', () => { localStorage.removeItem('adminToken'); window.location.href = '../index.html'; });
+    document.getElementById('hamburger').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('collapsed'));
+
+    async function loadLoanRequests() {
+      if (!adminToken) {
+        messageDiv.textContent = 'Not authenticated. Please log in.';
+        messageDiv.className = 'message error';
+        return;
+      }
+      messageDiv.textContent = 'Loading...';
+      try {
+        // Primary: dedicated endpoint
+        let res = await fetch('/api/admin/loan-requests', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        if (res.ok) {
+          const data = await res.json();
+          const requests = data.requests || data || [];
+          renderRequests(requests);
+          messageDiv.textContent = '';
+          return;
+        }
+
+        // Fallback: pull from clients and aggregate pending loan requests
+        res = await fetch('/api/admin/clients', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        if (!res.ok) throw new Error('Failed to fetch clients');
+        const cdata = await res.json();
+        const clients = cdata.clients || cdata || [];
+        const requests = [];
+        clients.forEach(client => {
+          (client.requests || []).forEach(r => {
+            if ((r.type || '').toLowerCase() === 'loan' && (r.status || '').toLowerCase() === 'pending') {
+              requests.push(Object.assign({ user: client }, r));
+            }
+          });
+          // also check accounts for loan entries marked pending/requested
+          (client.accounts || []).forEach(a => {
+            if ((a.type_name || '').toLowerCase() === 'loan' && ((a.account_status || '').toLowerCase().includes('pending') || (a.account_status || '').toLowerCase().includes('request'))) {
+              requests.push({ id: a.type_id || a.account_id || null, user: client, amount: a.requested_amount || a.balance || 0, created_at: a.requested_at || a.created_at || null, notes: a.notes || a.request_note || '' });
+            }
+          });
+        });
+        renderRequests(requests);
+        messageDiv.textContent = '';
+      } catch (err) {
+        console.error(err);
+        messageDiv.textContent = 'Error loading loan requests';
+        messageDiv.className = 'message error';
+      }
+    }
+
+    function renderRequests(requests) {
+      requestsBody.innerHTML = '';
+      if (!requests || requests.length === 0) {
+        requestsBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No pending loan requests.</td></tr>';
+        document.getElementById('loanRequestsDot').style.display = 'none';
+        return;
+      }
+      document.getElementById('loanRequestsDot').style.display = 'inline-block';
+      requests.forEach(r => {
+        const id = r.id || r.request_id || r.requestId || '';
+        const user = (r.user && (r.user.full_name || r.user.name)) || r.user_name || r.full_name || 'Unknown';
+        const amount = (r.money_requested !== undefined ? r.money_requested : (r.amount || r.requested_amount || r.amount_requested)) || '-';
+        const tier = r.tier || r.loan_tier || '-';
+        const date = r.created_at || r.requested_at || r.date || '';
+        const notes = r.notes || r.note || r.description || '';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${id}</td>
+          <td>${user}</td>
+          <td>₱${Number(amount || 0).toFixed(2)}</td>
+          <td>${tier}</td>
+          <td>${date ? new Date(date).toLocaleString() : '-'}</td>
+          <td>${notes || '-'}</td>
+          <td>
+            <button class="button" data-id="${id}" onclick="approveRequest('${id}')">Approve</button>
+            <button class="button" style="background:#e53935;margin-left:8px" data-id="${id}" onclick="denyRequest('${id}')">Deny</button>
+          </td>
+        `;
+        requestsBody.appendChild(tr);
+      });
+    }
+
+    async function approveRequest(requestId) {
+      if (!requestId) return alert('Request id not available');
+      if (!confirm('Approve this loan request?')) return;
+      try {
+        const res = await fetch(`/api/admin/loan-requests/${requestId}/approve`, { method: 'POST', headers: { 'Authorization': `Bearer ${adminToken}` } });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return alert(data.message || 'Failed to approve');
+        alert(data.message || 'Approved');
+        loadLoanRequests();
+      } catch (err) { console.error(err); alert('Error approving request'); }
+    }
+
+    async function denyRequest(requestId) {
+      if (!requestId) return alert('Request id not available');
+      if (!confirm('Deny this loan request?')) return;
+      try {
+        const res = await fetch(`/api/admin/loan-requests/${requestId}/deny`, { method: 'POST', headers: { 'Authorization': `Bearer ${adminToken}` } });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return alert(data.message || 'Failed to deny');
+        alert(data.message || 'Denied');
+        loadLoanRequests();
+      } catch (err) { console.error(err); alert('Error denying request'); }
+    }
+
+    // expose functions to inline handlers
+    window.approveRequest = approveRequest;
+    window.denyRequest = denyRequest;
+
+    loadLoanRequests();
+  </script>
+</body>
+</html>

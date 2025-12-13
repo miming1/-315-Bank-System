@@ -150,10 +150,10 @@ tr:hover { background-color: #f1f1f1; cursor: pointer; }
     <i class="hamburger" id="hamburger">&#9776;</i>
   </div>
   <ul>
-    <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
-    <li id="accounts"><i>👤</i> <span>Client Accounts</span><span class="red-dot" id="sidebarRedDot" style="display:none;"></span></li>
+  <li id="dashboard"><i>🏠</i> <span>Dashboard</span></li>
+  <li id="accounts"><i>👤</i> <span>Client Accounts</span><span class="red-dot" id="sidebarRedDot" style="display:none;"></span></li>
+  <li id="loanRequests"><i>💸</i> <span>Loan Requests</span><span class="red-dot" id="loanRequestsDot" style="display:none;"></span></li>
     <li id="transactions"><i>📜</i> <span>Transactions</span></li>
-    <li id="loan"><i>📋</i> <span>Loan Management</span></li>
     <li id="logout"><i>🚪</i> <span>Logout</span></li>
   </ul>
 </div>
@@ -210,6 +210,7 @@ tr:hover { background-color: #f1f1f1; cursor: pointer; }
 
     document.getElementById('dashboard').addEventListener('click', () => window.location.href = 'dashboard.html');
     document.getElementById('accounts').addEventListener('click', () => window.location.href = 'accounts.html');
+    document.getElementById('loanRequests').addEventListener('click', () => window.location.href = 'loan_requests.html');
     document.getElementById('transactions').addEventListener('click', () => window.location.href = 'transactions.html');
     document.getElementById('logout').addEventListener('click', () => {
       localStorage.removeItem('adminToken');
@@ -256,7 +257,18 @@ tr:hover { background-color: #f1f1f1; cursor: pointer; }
             a.account_status === 'Pending Freeze' || a.account_status === 'Pending Unfreeze'
           );
 
-          if (pendingAccount || client.status === 'pending_deletion') hasRequests = true;
+          // Detect loan requests: either explicit requests array or loan account with requested/pending status
+          const hasLoanRequest = (client.requests || []).some(r => {
+            const t = (r.type || '').toLowerCase();
+            const s = (r.status || '').toLowerCase();
+            return t === 'loan' && s === 'pending';
+          }) || client.accounts?.some(a => {
+            const tn = (a.type_name || '').toLowerCase();
+            const st = (a.account_status || '').toLowerCase();
+            return tn === 'loan' && (st.includes('pending') || st.includes('requested') || st.includes('request'));
+          });
+
+          if (pendingAccount || client.status === 'pending_deletion' || hasLoanRequest) hasRequests = true;
 
           const tr = document.createElement('tr');
           const requestDot = pendingAccount || client.status === 'pending_deletion' ? '🔴' : '';
@@ -273,6 +285,13 @@ tr:hover { background-color: #f1f1f1; cursor: pointer; }
         }
 
         sidebarRedDot.style.display = hasRequests ? 'inline-block' : 'none';
+        // Also show loan requests dot if any client has a pending loan request
+        const anyLoanRequests = data.clients.some(client => {
+          const lr = (client.requests || []).some(r => (r.type || '').toLowerCase() === 'loan' && (r.status || '').toLowerCase() === 'pending');
+          const la = (client.accounts || []).some(a => (a.type_name || '').toLowerCase() === 'loan' && ((a.account_status || '').toLowerCase().includes('pending') || (a.account_status || '').toLowerCase().includes('requested')));
+          return lr || la;
+        });
+        document.getElementById('loanRequestsDot').style.display = anyLoanRequests ? 'inline-block' : 'none';
 
       } catch (err) {
         console.error(err);

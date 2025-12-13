@@ -1,75 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Loan Account - BankSys</title>
   <link rel="stylesheet" href="../style.css">
-
-  <style>
-    /* --- FORM LAYOUT IMPROVEMENTS --- */
-
-    .loan-card {
-      background: white;
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-      margin-top: 10px;
-      max-width: 600px;
-    }
-
-    form label {
-      font-weight: 600;
-      margin-top: 12px;
-      display: block;
-    }
-
-    form input,
-    form select {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #aaa;
-      border-radius: 6px;
-      margin-top: 6px;
-      font-size: 15px;
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 15px;
-    }
-
-    #loanSummary {
-      max-width: 600px;
-    }
-
-    .button {
-      padding: 10px 18px;
-      background: #0070f3;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-top: 15px;
-    }
-    .button:disabled {
-      background: gray;
-      cursor: not-allowed;
-    }
-
-    /* Center main content better */
-    .main-content {
-      max-width: 800px;
-      margin: 0 auto;
-    }
-  </style>
 </head>
-
 <body>
+  <!-- Sidebar -->
   <div class="sidebar" id="sidebar">
     <div class="header">
-      <h2>BankSys</h2><i class="hamburger" id="hamburger">&#9776;</i>
+      <h2>BankSys</h2>
+      <i class="hamburger" id="hamburger">&#9776;</i>
     </div>
     <ul>
       <li id="home"><i>🏠</i> <span>Dashboard</span></li>
@@ -80,247 +22,395 @@
     </ul>
   </div>
 
-  <div class="main-content">
-    <h1>Loan Services</h1>
+  <!-- Main Content -->
+  <div class="main-content" id="mainContent">
+    <h1>Loan Account</h1>
 
-    <!-- Active Loan Section -->
-    <div id="activeLoanSection" class="loan-card" style="display:none;">
-      <h2>Your Active Loan</h2>
-      <p>Remaining Balance: ₱<span id="activeRemaining">0.00</span></p>
-      <p>Next Payment: ₱<span id="activeMonthly">0.00</span></p>
-      <p>Due Date: <span id="activeDue">-</span></p>
-      <button class="button" id="payNowBtn">Pay Now</button>
+    <!-- Balance -->
+    <div class="balance-container" style="display:flex; align-items:center; gap:20px; margin-bottom:20px;">
+      <p>Loan Balance: ₱<span id="loanBalance">0.00</span></p>
     </div>
 
-    <!-- Loan Form -->
-    <div class="loan-card" id="loanFormContainer">
-      <h2>Apply For a Loan</h2>
-      <form id="loanForm">
-
-        <label>Loan Amount (₱)</label>
-        <input type="number" id="amount" required min="1000" step="0.01" oninput="validateForm()">
-
-        <label>Loan Term (Months)</label>
-        <select id="term" required oninput="validateForm()">
-          <option value="3">3 Months</option>
-          <option value="6">6 Months</option>
-          <option value="12" selected>12 Months</option>
-          <option value="24">24 Months</option>
-        </select>
-
-        <label>Monthly Income (₱)</label>
-        <input type="number" id="income" required min="0" oninput="validateForm()">
-
-        <label>Employment Status</label>
-        <select id="employment" required>
-          <option value="">Select</option>
-          <option value="Employed">Employed</option>
-          <option value="Self-Employed">Self-Employed</option>
-          <option value="Freelancer">Freelancer</option>
-          <option value="Unemployed">Unemployed</option>
-        </select>
-
-        <!-- NEW JOB POSITION DROPDOWN -->
-        <label>Job Position</label>
-        <select id="job_position" required>
-          <option value="">Select Position</option>
-          <option value="Business Owner">Business Owner</option>
-          <option value="Field Worker">Field Worker</option>
-          <option value="Freelancer">Freelancer</option>
-          <option value="Manager">Manager</option>
-          <option value="Office Staff">Office Staff</option>
-          <option value="Technical Specialist">Technical Specialist</option>
-          <option value="Student">Student</option>    
-          <option value="Other">Other</option>
-        </select>
-
-
-        <label>Purpose of Loan</label>
-        <input type="text" id="purpose" required oninput="validateForm()">
-
-        <button type="button" class="button" id="calculateBtn" disabled>Calculate Loan</button>
-      </form>
+    <!-- Go Back Button -->
+    <div style="display: flex; justify-content: right;">
+      <button class="button" id="goBackBtn" style="display:none;">Go Back</button>
     </div>
 
-    <!-- Summary -->
-    <div id="loanSummary" class="loan-card" style="display:none;">
-      <h2>Loan Summary</h2>
-      <p>Max Loanable: ₱<span id="maxLoanable"></span></p>
-      <p>Interest Rate (APR): <span id="summaryRate"></span>%</p>
-      <p>Monthly Payment: ₱<span id="summaryMonthly"></span></p>
-
-      <p id="eligibilityHint"></p>
-
-      <button class="button" id="showTermsBtn">View Terms & Conditions</button>
+    <!-- Loan Tier Tiles -->
+    <div class="dashboard subtype-dashboard" id="loanTiles">
+      <div class="card account-card account-closed" id="tier1Tile">
+        <h3>Tier 1 Loan</h3>
+        <p>Amount: ₱5,000</p>
+        <p id="tier1Status">Not Applied</p>
+      </div>
+      <div class="card account-card account-closed" id="tier2Tile">
+        <h3>Tier 2 Loan</h3>
+        <p>Amount: ₱25,000</p>
+        <p id="tier2Status">Not Applied</p>
+      </div>
+      <div class="card account-card account-closed" id="tier3Tile">
+        <h3>Tier 3 Loan</h3>
+        <p>Amount: ₱50,000</p>
+        <p id="tier3Status">Not Applied</p>
+      </div>
+      <div class="card account-card account-open" id="historyTile">
+        <h3>Transaction History</h3>
+        <p>View all your loan transactions.</p>
+      </div>
     </div>
 
-    <!-- History -->
-    <h2 style="margin-top:40px;">Loan Applications History</h2>
-    <table id="loanHistoryTable">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Amount</th>
-          <th>Term</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <!-- Form Container / Loan Details -->
+    <div style="display:flex; justify-content:center;">
+      <div class="form" id="formContainer" style="display:none;"></div>
+    </div>
 
+    <!-- Transaction Table -->
+    <div id="transactionContainer" style="margin-top:20px; display:none;">
+      <div id="loanMessage" class="message"></div>
+      <table id="loanTransactionTable">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Reference / Notes</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    
     <!-- Modal -->
     <div class="modal" id="loanModal">
       <div class="modal-content">
         <span class="modal-close" id="modalClose">&times;</span>
-        <div id="modalBody"></div>
+        <p id="modalMessage"></p>
+        <div id="modalActions" style="margin-top:20px; text-align:center;"></div>
       </div>
     </div>
   </div>
+  
+  <!-- Scripts -->
+  <script>
+    ['home','history','profile','notifications','logout'].forEach(id => {
+      document.getElementById(id).addEventListener('click', () => {
+        if(id === 'logout'){
+          localStorage.removeItem('clientToken');
+          window.location.href='../index.html';
+        } else window.location.href=id+'.html';
+      });
+    });
 
-<script>
-  const apiBase = '/api/loan';
-  const userId = localStorage.getItem('user_id') || 1;
+    // ----------------------------
+    // ELEMENTS
+    // ----------------------------
+    const sidebar = document.getElementById('sidebar');
+    const hamburger = document.getElementById('hamburger');
+    const loanModal = document.getElementById('loanModal');
+    const modalClose = document.getElementById('modalClose');
+    const modalMessage = document.getElementById('modalMessage');
+    const modalActions = document.getElementById('modalActions');
 
-  /* -----------------------
-     REAL-TIME VALIDATION
-  ------------------------ */
-  function validateForm() {
-    const amount = document.getElementById('amount').value;
-    const term = document.getElementById('term').value;
-    const income = document.getElementById('income').value;
-    const employment = document.getElementById('employment').value;
-    const purpose = document.getElementById('purpose').value;
+    const formContainer = document.getElementById('formContainer');
+    const loanTiles = document.getElementById('loanTiles');
+    const loanBalance = document.getElementById('loanBalance');
+    const goBackBtn = document.getElementById('goBackBtn');
+    const transactionContainer = document.getElementById('transactionContainer');
+    const clientToken = localStorage.getItem('clientToken');
 
-    const isValid =
-      amount > 0 &&
-      term !== "" &&
-      income > 0 &&
-      employment !== "" &&
-      purpose.trim() !== "";
+    const tierStatus = {
+      tier1: 'not_applied',
+      tier2: 'not_applied',
+      tier3: 'not_applied'
+    };
 
-    document.getElementById('calculateBtn').disabled = !isValid;
-  }
+    const tierAmounts = {
+      tier1: 5000,
+      tier2: 25000,
+      tier3: 50000
+    };
 
-  /* ----------------------
-     (Your Existing Logic)
-  ---------------------- */
+    // ----------------------------
+    // INITIALIZATION
+    // ----------------------------
+    hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+    modalClose.addEventListener('click', () => loanModal.classList.remove('active'));
 
-  const modal = document.getElementById("loanModal");
-  const modalClose = document.getElementById("modalClose");
-  const modalBody = document.getElementById("modalBody");
-
-  modalClose.onclick = () => modal.classList.remove('active');
-
-  async function loadLoanData() {
-    const eligResp = await fetch(`${apiBase}/eligibility/${userId}`);
-    const elig = await eligResp.json();
-
-    document.getElementById('eligibilityHint').textContent =
-      `Combined Deposit+Savings: ₱${elig.combined.toFixed(2)} — eligible tiers: ${elig.eligible_tiers.join(', ') || 'none'}`;
-
-    if (elig.activeLoan) {
-      document.getElementById("activeLoanSection").style.display = "block";
-      document.getElementById("activeRemaining").textContent = Number(elig.activeLoan.remaining_balance).toFixed(2);
-      document.getElementById("activeMonthly").textContent = Number(elig.activeLoan.monthly_payment).toFixed(2);
-      document.getElementById("activeDue").textContent = elig.activeLoan.next_due || '-';
+    function showModal(message, actionsHTML="") {
+      modalMessage.innerHTML = message;
+      modalActions.innerHTML = actionsHTML;
+      loanModal.classList.add('active');
     }
 
-    const statusResp = await fetch(`${apiBase}/status/${userId}`);
-    const status = await statusResp.json();
+    function updateTierStatusText() {
+      document.getElementById('tier1Status').textContent = 
+        tierStatus.tier1.replace('_', ' ').toUpperCase();
+      document.getElementById('tier2Status').textContent = 
+        tierStatus.tier2.replace('_', ' ').toUpperCase();
+      document.getElementById('tier3Status').textContent = 
+        tierStatus.tier3.replace('_', ' ').toUpperCase();
+    }
+    updateTierStatusText();
+    // load current approved loan balance
+    loadLoanBalance();
 
-    const tbody = document.querySelector('#loanHistoryTable tbody');
-    tbody.innerHTML = '';
-
-    status.history.forEach(app => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${app.application_date}</td>
-        <td>₱${Number(app.loan_amount).toFixed(2)}</td>
-        <td>${app.loan_term_months}</td>
-        <td>${app.status}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-  }
-  loadLoanData();
-
-  document.getElementById('calculateBtn').addEventListener('click', async () => {
-    const payload = {
-      user_id: Number(userId),
-      amount: Number(document.getElementById('amount').value),
-      term_months: Number(document.getElementById('term').value),
-      income: Number(document.getElementById('income').value),
-      employment_status: document.getElementById('employment').value,
-      job_title: document.getElementById('jobTitle').value,
-      purpose: document.getElementById('purpose').value
-    };
-
-    const resp = await fetch(`${apiBase}/calculate`, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify(payload)
+    // ----------------------------
+    // GO BACK
+    // ----------------------------
+    goBackBtn.addEventListener('click', () => {
+      formContainer.style.display = 'none';
+      transactionContainer.style.display = 'none';
+      loanTiles.style.display = 'flex';
+      goBackBtn.style.display = 'none';
     });
 
-    const data = await resp.json();
-    if (!resp.ok) return alert("Error: " + data.error);
+    // ----------------------------
+    // LOAN TILE CLICK HANDLERS
+    // ----------------------------
+    function showLoanDetails(tier) {
+      const status = tierStatus[tier];
 
-    document.getElementById('maxLoanable').textContent = Number(data.maxPrincipal).toFixed(2);
-    document.getElementById('summaryRate').textContent = Number(data.interestRate).toFixed(2);
-    document.getElementById('summaryMonthly').textContent = Number(data.monthlyForRequested).toFixed(2);
+      if(status === 'not_applied') {
+        formContainer.innerHTML = `
+          <h2>${tier.toUpperCase()} Details</h2>
+          <p>Amount: ₱${tierAmounts[tier]}</p>
+          <p>Terms & Conditions: [placeholder for text]</p>
+          <button class="button" id="applyBtn">Apply</button>
+        `;
+        formContainer.style.display = 'block';
+        loanTiles.style.display = 'none';
+        goBackBtn.style.display = 'inline-block';
 
-    document.getElementById('loanSummary').style.display = 'block';
-  });
+        document.getElementById('applyBtn').addEventListener('click', () => {
+          // Show application modal
+          showModal(
+            `<h3>${tier.toUpperCase()} Loan Application</h3>
+            <form id="loanAppForm">
+              <input type="text" placeholder="Full Name" required>
+              <input type="email" placeholder="Email" required>
+              <input type="number" placeholder="Requested Amount" value="${tierAmounts[tier]}" required>
+              <button type="submit">Submit Application</button>
+            </form>`,
+            `<button id="closeModalBtn">Exit</button>`
+          );
+          document.getElementById('closeModalBtn').addEventListener('click', () => loanModal.classList.remove('active'));
 
-  document.getElementById('showTermsBtn').addEventListener('click', () => {
-    const rate = document.getElementById('summaryRate').textContent;
-    const monthly = document.getElementById('summaryMonthly').textContent;
+          const appForm = document.getElementById('loanAppForm');
+          appForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            const payload = {
+              tier,
+              amount: parseFloat(e.target.querySelector('input[type=number]').value) || tierAmounts[tier],
+              full_name: e.target.querySelector('input[type=text]').value || '',
+              email: e.target.querySelector('input[type=email]').value || '',
+            };
 
-    modalBody.innerHTML = `
-      <h3>Terms & Conditions</h3>
-      <p>Interest (APR): ${rate}%</p>
-      <p>Monthly Payment: ₱${monthly}</p>
-      <p>Confirm submission to proceed.</p>
-      <button id="acceptLoanBtn" class="button">Accept & Submit</button>
-      <button id="cancelLoanBtn" class="button">Cancel</button>
-    `;
+            // try server endpoint(s)
+            async function tryPost(url) {
+              try {
+                const res = await fetch(url, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
+                  },
+                  body: JSON.stringify(payload)
+                });
+                const data = await res.json().catch(() => ({}));
+                return { ok: res.ok, data };
+              } catch (err) {
+                return { ok: false };
+              }
+            }
 
-    modal.classList.add('active');
+            // Post to server-backed loan_requests endpoint (no local fallback)
+            const res = await fetch('/api/client/loan-requests', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
+              },
+              body: JSON.stringify({ amount: payload.amount, tier: payload.tier, notes: payload.full_name })
+            });
 
-    document.getElementById('cancelLoanBtn').onclick =
-      () => modal.classList.remove('active');
+            if (res.ok) {
+              const data = await res.json().catch(() => ({}));
+              tierStatus[tier] = 'pending';
+              updateTierStatusText();
+              showModal("Thanks for applying! Your request is pending admin approval.", `<button id="exitBtn">Exit</button>`);
+              document.getElementById('exitBtn').addEventListener('click', () => loanModal.classList.remove('active'));
+              // refresh user's own requests display and update loan balance
+              await loadAndRenderClientRequests();
+              await loadLoanBalance();
+              return;
+            } else {
+              const err = await res.json().catch(() => ({}));
+              showModal(`Failed to submit request: ${err.message || 'server error'}`, `<button id="exitBtn">Close</button>`);
+              document.getElementById('exitBtn').addEventListener('click', () => loanModal.classList.remove('active'));
+              return;
+            }
+          });
+        });
 
-    document.getElementById('acceptLoanBtn').onclick = submitLoan;
-  });
+      } else if(status === 'pending') {
+        formContainer.innerHTML = `<h2>${tier.toUpperCase()} Loan</h2>
+          <p>Your application is pending. Please wait for approval.</p>`;
+        formContainer.style.display = 'block';
+        loanTiles.style.display = 'none';
+        goBackBtn.style.display = 'inline-block';
+      } else if(status === 'active') {
+        formContainer.innerHTML = `<h2>${tier.toUpperCase()} Loan</h2>
+          <p>Balance: ₱${tierAmounts[tier]}</p>
+          <p>Payment logbook: [placeholder table]</p>`;
+        formContainer.style.display = 'block';
+        loanTiles.style.display = 'none';
+        goBackBtn.style.display = 'inline-block';
+      }
+    }
 
-  async function submitLoan() {
-    const payload = {
-      user_id: Number(userId),
-      amount: Number(document.getElementById('amount').value),
-      term_months: Number(document.getElementById('term').value),
-      income: Number(document.getElementById('income').value),
-      employment_status: document.getElementById('employment').value,
-      job_title: document.getElementById('jobTitle').value,
-      purpose: document.getElementById('purpose').value
-    };
+    document.getElementById('tier1Tile').addEventListener('click', () => showLoanDetails('tier1'));
+    document.getElementById('tier2Tile').addEventListener('click', () => showLoanDetails('tier2'));
+    document.getElementById('tier3Tile').addEventListener('click', () => showLoanDetails('tier3'));
 
-    const resp = await fetch(`${apiBase}/apply`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
+    // ----------------------------
+    // TRANSACTION HISTORY TILE
+    // ----------------------------
+    document.getElementById('historyTile').addEventListener('click', () => {
+      loanTiles.style.display = 'none';
+      formContainer.style.display = 'none';
+      transactionContainer.style.display = 'block';
+      goBackBtn.style.display = 'inline-block';
+
+      loadLoanTransactions();
     });
 
-    const body = await resp.json();
-    if (!resp.ok) return alert("Error: " + body.error);
+    // Combined loan transactions: server transactions + pending requests
+    async function loadLoanTransactions() {
+      const tbody = document.querySelector('#loanTransactionTable tbody');
+      const messageDiv = document.getElementById('loanMessage');
+      tbody.innerHTML = '';
+      if (!clientToken) {
+        messageDiv.textContent = 'Not authenticated.';
+        messageDiv.className = 'message error';
+        return;
+      }
+      messageDiv.textContent = 'Loading transactions...';
+      let combined = [];
 
-    modalBody.innerHTML = `
-      <p>Application submitted (ID: ${body.applicationId}).</p>
-      <button id="closeOk" class="button">OK</button>
-    `;
+      // Fetch server-side loan transactions
+      try {
+        const res = await fetch('/api/client/transactions/loan', { headers: { 'Authorization': `Bearer ${clientToken}` } });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const txs = Array.isArray(data) ? data : (data.transactions || []);
+          txs.forEach(tx => combined.push({
+            date: tx.transaction_date || tx.created_at,
+            type: tx.transaction_type || 'Loan',
+            amount: Number(tx.amount || tx.loan_amount || 0),
+            notes: tx.description || tx.notes || ''
+          }));
+        }
+      } catch (e) { console.error('fetch loan tx failed', e); }
 
-    document.getElementById('closeOk').onclick =
-      () => { modal.classList.remove('active'); loadLoanData(); };
-  }
-</script>
+      // Fetch loan requests (pending + approved) and include them if not duplicated
+      try {
+        const rres = await fetch('/api/client/loan-requests', { headers: { 'Authorization': `Bearer ${clientToken}` } });
+        if (rres.ok) {
+          const rdata = await rres.json().catch(() => ({}));
+          const requests = rdata.requests || [];
+          // helper to detect duplicate: same amount and date within 60s
+          const isDuplicate = (req) => {
+            const reqTime = new Date(req.created_at || req.createdAt || Date.now()).getTime();
+            return combined.some(tx => {
+              const txTime = new Date(tx.date || tx.created_at || 0).getTime();
+              const sameAmount = Number(tx.amount || 0) === Number(req.money_requested || req.amount || 0);
+              return sameAmount && Math.abs(txTime - reqTime) <= 60000; // 60s
+            });
+          };
 
+          requests.forEach(r => {
+            const status = (r.status || '').toLowerCase();
+            const amount = Number(r.money_requested || r.amount || 0);
+            if (isNaN(amount) || amount === 0) return;
+            if (isDuplicate(r)) return; // skip if server already provided a matching tx
+
+            const entryType = (status === 'pending') ? 'Loan Request' : 'Loan Disbursement';
+            combined.push({
+              date: r.created_at,
+              type: entryType,
+              amount: amount,
+              notes: r.notes || r.tier || (`Request ${status}`)
+            });
+          });
+        }
+      } catch (e) { console.error('fetch loan requests failed', e); }
+
+      if (!combined.length) {
+        messageDiv.textContent = 'No transactions yet.';
+        messageDiv.className = 'message';
+        return;
+      }
+
+      // Sort by date desc and render
+      combined.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+      combined.forEach(tx => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${tx.date ? new Date(tx.date).toLocaleString() : '-'}</td>
+          <td>${tx.type}</td>
+          <td>₱${Number(tx.amount || 0).toFixed(2)}</td>
+          <td>${tx.notes || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      messageDiv.textContent = '';
+      messageDiv.className = 'message';
+    }
+
+      // Load client's loan requests from server and render pending ones
+      async function loadAndRenderClientRequests() {
+        const tbody = document.querySelector('#loanTransactionTable tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!clientToken) return; // cannot fetch without auth
+        try {
+          const res = await fetch('/api/client/loan-requests', { headers: { 'Authorization': `Bearer ${clientToken}` } });
+          if (!res.ok) return;
+          const data = await res.json();
+          const requests = data.requests || [];
+          requests.filter(r => (r.status || '').toLowerCase() === 'pending').forEach(r => {
+            const tr = document.createElement('tr');
+            const date = r.created_at || new Date().toISOString();
+            tr.innerHTML = `
+              <td>${new Date(date).toLocaleString()}</td>
+              <td>Loan Request</td>
+              <td>₱${Number(r.money_requested || r.amount || 0).toFixed(2)}</td>
+              <td>${r.notes || r.tier || 'Pending approval'}</td>
+            `;
+            tr.style.opacity = '0.95';
+            tbody.appendChild(tr);
+          });
+        } catch (e) { console.error('load client loan requests failed', e); }
+      }
+
+        // Sum approved loan requests and update the Loan Balance display
+        async function loadLoanBalance() {
+          if (!clientToken) { loanBalance.textContent = '0.00'; return; }
+          try {
+            const res = await fetch('/api/client/loan-requests', { headers: { 'Authorization': `Bearer ${clientToken}` } });
+            if (!res.ok) { loanBalance.textContent = '0.00'; return; }
+            const data = await res.json().catch(() => ({}));
+            const requests = data.requests || data || [];
+            const sum = requests
+              .filter(r => {
+                const s = (r.status || '').toLowerCase();
+                return s === 'approved' || s === 'active';
+              })
+              .reduce((acc, r) => acc + Number(r.money_requested || r.amount || 0), 0);
+            loanBalance.textContent = Number(sum || 0).toFixed(2);
+          } catch (err) { console.error('loadLoanBalance failed', err); loanBalance.textContent = '0.00'; }
+        }
+        
+  </script>
 </body>
 </html>
