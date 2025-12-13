@@ -56,7 +56,7 @@ router.post('/signup', async (req, res) => {
         const accountsToCreate = [
             { type_name: 'Deposit', description: 'Deposit account', balance: 0.00, status: 'Open' },
             { type_name: 'Savings', description: 'Savings account', balance: 0.00, status: 'Open' },
-            { type_name: 'Loan', description: 'Loan account', balance: 0.00, status: 'Frozen' } // LOAN LOCKED
+            { type_name: 'Loan', description: 'Loan account', balance: 0.00, status: 'Closed' }
         ];
 
         let createdAccounts = {};
@@ -84,9 +84,6 @@ router.post('/signup', async (req, res) => {
             }
             if (acc.type_name === "Savings") {
                 subtypes = ["Savings", "Withdraw", "Transfer", "Savings Summary", "Transaction History"];
-            }
-            if (acc.type_name === "Loan") {
-                subtypes = ["Tier 1", "Tier 2", "Tier 3", "Transaction History"];
             }
 
             for (const st of subtypes) {
@@ -517,6 +514,36 @@ router.get("/notifications/unread", authenticateClient, async (req, res) => {
   );
   res.json({ unread });
 });
+
+
+router.get("/me", authenticateClient, async (req, res) => {
+  try {
+    const userId = req.clientId;
+
+    const [[user]] = await db.query(
+      `SELECT full_name FROM users WHERE user_id = ?`,
+      [userId]
+    );
+
+    const [[loan]] = await db.query(
+      `SELECT account_status
+       FROM account_type
+       WHERE user_id = ? AND type_name = 'Loan'`,
+      [userId]
+    );
+
+    res.json({
+      full_name: user.full_name,
+      loan_status: loan?.account_status === "Open" ? "open" : "locked"
+    });
+
+  } catch (err) {
+    console.error("ME ROUTE ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 
 
 export default router;

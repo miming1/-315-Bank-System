@@ -66,134 +66,131 @@
     </div>
   </div>
 
-  <script>
-    const sidebar = document.getElementById('sidebar');
-    const hamburger = document.getElementById('hamburger');
-    const sidebarItems = document.querySelectorAll('.sidebar ul li');
-    const modal = document.getElementById('accountModal');
-    const modalClose = document.getElementById('modalClose');
-    const accountMessage = document.getElementById('accountMessage');
+<script>
+  const sidebar = document.getElementById('sidebar');
+  const hamburger = document.getElementById('hamburger');
+  const sidebarItems = document.querySelectorAll('.sidebar ul li');
+  const modal = document.getElementById('accountModal');
+  const modalClose = document.getElementById('modalClose');
+  const accountMessage = document.getElementById('accountMessage');
 
-    // Sidebar toggle
-    hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+  // Sidebar toggle
+  hamburger.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
 
-    // Highlight active
-    sidebarItems.forEach(item => {
-      const page = item.id + '.html';
-      if (window.location.pathname.endsWith(page)) {
-        item.style.backgroundColor = 'var(--accent-color)';
-        item.style.color = '#000';
-      }
-    });
-
-    const userNameSpan = document.getElementById('userName');
-    const clientToken = localStorage.getItem('clientToken');
-
-    if (clientToken) {
-      fetch('/api/client/profile/me', {
-        headers: { 'Authorization': `Bearer ${clientToken}` }
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.full_name) userNameSpan.textContent = data.full_name;
-        localStorage.setItem('clientData', JSON.stringify(data));
-      })
-      .catch(err => console.error(err));
+  // Highlight active
+  sidebarItems.forEach(item => {
+    const page = item.id + '.html';
+    if (window.location.pathname.endsWith(page)) {
+      item.style.backgroundColor = 'var(--accent-color)';
+      item.style.color = '#000';
     }
+  });
 
-    // Sidebar navigation
-    ['home','history','profile','notifications','logout'].forEach(id => {
-      document.getElementById(id).addEventListener('click', () => {
-        if(id === 'logout'){
-          localStorage.removeItem('clientToken');
-          window.location.href='../index.html';
-        } else window.location.href=id+'.html';
-      });
+  const userNameSpan = document.getElementById('userName');
+  const clientToken = localStorage.getItem('clientToken');
+
+  // Load user data
+  if (clientToken) {
+    fetch('/api/client/profile/me', {
+      headers: { 'Authorization': `Bearer ${clientToken}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.full_name) userNameSpan.textContent = data.full_name;
+
+      // Save the backend loan status (important!)
+      // Expecting: data.loan_status = "open" or "locked"
+      localStorage.setItem('clientData', JSON.stringify(data));
+
+      // Update the loan tile appearance based on BACKEND ONLY
+      const loanTile = document.getElementById("loan");
+      const loanStatusText = document.getElementById("loanStatusText");
+
+      if (data.loan_status === "open") {
+        loanTile.classList.remove("account-eligible");
+        loanTile.classList.add("account-open");
+        loanStatusText.textContent = "Your loan account";
+      }
+    })
+    .catch(err => console.error(err));
+  }
+
+  // Sidebar navigation
+  ['home','history','profile','notifications','logout'].forEach(id => {
+    document.getElementById(id).addEventListener('click', () => {
+      if(id === 'logout'){
+        localStorage.removeItem('clientToken');
+        window.location.href='../index.html';
+      } else window.location.href=id+'.html';
     });
+  });
 
-    // Modal close
-    modalClose.addEventListener('click', () => modal.classList.remove('active'));
+  // Modal close
+  modalClose.addEventListener('click', () => modal.classList.remove('active'));
 
-    // Account click behavior
-    const accounts = document.querySelectorAll('.account-card');
-    accounts.forEach(card => {
-      card.addEventListener('click', () => {
-        const status = card.classList.contains('account-open') ? 'open' :
-                      card.classList.contains('account-eligible') ? 'eligible' :
-                      'closed';
-        const id = card.id; // deposit, savings, loan, etc.
+  // Account click behavior (LOAN FIX APPLIED HERE)
+  const accounts = document.querySelectorAll('.account-card');
+  accounts.forEach(card => {
+    card.addEventListener('click', () => {
+      const status = card.classList.contains('account-open') ? 'open' :
+                     card.classList.contains('account-eligible') ? 'eligible' :
+                     'closed';
+      const id = card.id;
 
-        // Fetch balances from localStorage
-        const clientData = JSON.parse(localStorage.getItem('clientData')) || {};
-        const depositBal = parseFloat(clientData.deposit_balance || 0);
-        const savingsBal = parseFloat(clientData.savings_balance || 0);
-        const totalBal = depositBal + savingsBal;
-
-        if (status === 'open') {
-          if (id === 'deposit') window.location.href = 'deposit.html';
-          else if (id === 'savings') window.location.href = 'savings.html';
-          else {
-            accountMessage.textContent = `The ${card.querySelector('h3').textContent} account is temporarily closed.`;
-            modal.classList.add('active');
-          }
-        } else if (status === 'eligible' && id === 'loan') {
-          if (totalBal >= 50000) {
-            // Eligible: open loan page
-            window.location.href = 'loan.html';
-          } else {
-            // Not yet eligible: show modal with requirement
-            accountMessage.innerHTML = `
-              The ${card.querySelector('h3').textContent} account is not available yet.<br><br>
-              Minimum total balance required (Deposit + Savings): ₱50,000
-              <br>
-              <br>
-              Your current total balance: ₱${totalBal.toFixed(2)}
-            `;
-            modal.classList.add('active');
-          }
-        } else {
-          accountMessage.textContent = `The ${card.querySelector('h3').textContent} account is temporarily closed.`;
-          modal.classList.add('active');
-        }
-      });
-    });
-
-    // Optional: dynamic loan tile update (colors or red alert)
-    function updateLoanTile(){
-      const loanTile = document.getElementById('loan');
       const clientData = JSON.parse(localStorage.getItem('clientData')) || {};
-      const totalBal = (parseFloat(clientData.deposit_balance || 0) + parseFloat(clientData.savings_balance || 0));
+      const depositBal = parseFloat(clientData.deposit_balance || 0);
+      const savingsBal = parseFloat(clientData.savings_balance || 0);
+      const totalBal = depositBal + savingsBal;
 
-      if(totalBal >= 50000){
-        loanTile.classList.remove('account-eligible');
-        loanTile.classList.add('account-open');
-        loanTile.querySelector('p').textContent = 'Your loan account';
-      } else {
-        loanTile.classList.add('account-eligible');
-        loanTile.querySelector('p').textContent = 'You are not yet eligible for this account.';
-      }
-    }
+      // Deposit & Savings (unchanged)
+      if (status === 'open') {
+        if (id === 'deposit') return window.location.href = 'deposit.html';
+        if (id === 'savings') return window.location.href = 'savings.html';
 
-    updateLoanTile();
-
-    //check if the user have read the notififications
-    async function checkUnreadNotifications() {
-        try {
-          const res = await fetch("/api/client/notifications/unread", {
-            headers: { "Authorization": "Bearer " + localStorage.getItem("clientToken") }
-          });
-
-          const data = await res.json();
-
-          const notifDot = document.getElementById("notifDot");
-          notifDot.style.display = data.unread > 0 ? "inline-block" : "none";
-
-        } catch (err) {
-          console.error("Unread check failed:", err);
+        if (id === 'loan') {
+          // Backend says loan is OPEN → always allow
+          return window.location.href = "loan.html";
         }
+
+        accountMessage.textContent = `The ${card.querySelector('h3').textContent} account is temporarily closed.`;
+        return modal.classList.add('active');
       }
 
-    checkUnreadNotifications();
-  </script>
+      // Loan still locked
+      if (id === 'loan' && status === 'eligible') {
+        accountMessage.innerHTML = `
+          The Loan account is not available yet.<br><br>
+          Minimum total balance required (Deposit + Savings): ₱50,000<br><br>
+          Your current total balance: ₱${totalBal.toFixed(2)}
+        `;
+        return modal.classList.add('active');
+      }
+
+      // Other closed accounts
+      accountMessage.textContent = `The ${card.querySelector('h3').textContent} account is temporarily closed.`;
+      modal.classList.add('active');
+    });
+  });
+
+  // Notification unread check
+  async function checkUnreadNotifications() {
+    try {
+      const res = await fetch("/api/client/notifications/unread", {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("clientToken") }
+      });
+
+      const data = await res.json();
+
+      const notifDot = document.getElementById("notifDot");
+      notifDot.style.display = data.unread > 0 ? "inline-block" : "none";
+
+    } catch (err) {
+      console.error("Unread check failed:", err);
+    }
+  }
+
+  checkUnreadNotifications();
+</script>
+
 </body>
 </html>
